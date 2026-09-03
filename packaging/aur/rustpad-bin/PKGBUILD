@@ -1,0 +1,24 @@
+# Maintainer: Talal A. Alsubaie <t.subaie@gmail.com>
+# AUR package installing the prebuilt release binary. The release workflow
+# fills pkgver and sha256sums and attaches the result to each GitHub release.
+pkgname=rustpad-bin
+_pkgname=rustpad
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc="Dead simple, recoverable text editor built with GTK 4, libadwaita and GtkSourceView"
+arch=('x86_64')
+url="https://github.com/tsubaie/RustPad"
+license=('MIT')
+depends=('gtk4' 'libadwaita' 'gtksourceview5')
+provides=('rustpad')
+conflicts=('rustpad')
+source=("$url/releases/download/v$pkgver/rustpad-$pkgver-x86_64-linux.tar.gz")
+sha256sums=('@SHA256@')
+
+package() {
+  cd "$srcdir/rustpad-$pkgver"
+  install -Dm755 rustpad "$pkgdir/usr/bin/rustpad"
+  install -Dm644 com.tsubaie.rustpad.desktop "$pkgdir/usr/share/applications/com.tsubaie.rustpad.desktop"
+  install -Dm644 com.tsubaie.rustpad.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/com.tsubaie.rustpad.svg"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$_pkgname/LICENSE"
+}
