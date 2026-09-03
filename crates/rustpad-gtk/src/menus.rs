@@ -43,10 +43,7 @@ pub fn build() -> Menus {
             ("_Reopen closed tab", "win.reopen-last"),
         ]),
     );
-    file.append_section(
-        None,
-        &section(&[("Se_ttings", "win.settings"), ("E_xit", "win.exit")]),
-    );
+    file.append_section(None, &section(&[("E_xit", "win.exit")]));
 
     let edit = gio::Menu::new();
     edit.append_section(
@@ -96,12 +93,16 @@ pub fn build() -> Menus {
             ("_Word wrap", "win.word-wrap"),
         ]),
     );
-    view.append_section(None, &section(&[("Se_ttings", "win.settings")]));
+
+    let settings = gio::Menu::new();
+    settings.append_section(None, &section(&[("_Settings…", "win.settings")]));
+    settings.append_section(None, &section(&[("_About RustPad", "win.about")]));
 
     let bar = gio::Menu::new();
     bar.append_submenu(Some("_File"), &file);
     bar.append_submenu(Some("_Edit"), &edit);
     bar.append_submenu(Some("_View"), &view);
+    bar.append_submenu(Some("_Settings"), &settings);
 
     let tab_context = gio::Menu::new();
     tab_context.append_section(

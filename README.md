@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="data/icons/com.tsubaie.rustpad.svg" alt="RustPad" width="96" height="96">
+  <img src="data/rustpad-logo.svg" alt="RustPad" width="300">
 </p>
-
-<h1 align="center">RustPad</h1>
 
 <p align="center">
   <strong>Dead simple. No BS. It never loses your text.</strong><br>
@@ -23,19 +21,19 @@
 
 ---
 
-## Why RustPad
+## 🦀 Why RustPad
 
 It's Rust. It opens, it saves, it stays out of your way. That's it.
 
-**Opens instantly.** A real native app, not a browser in a box. Around 3 MB on disk, and it is on screen before you finish reaching for the keyboard. Your thought is still fresh when the cursor starts blinking.
+⚡ **Opens instantly.** A real native app, not a browser in a box. Around 3 MB on disk, and it is on screen before you finish reaching for the keyboard. Your thought is still fresh when the cursor starts blinking.
 
-**Never loses your work.** Every keystroke is saved to disk within half a second. Close the window, kill the process, pull the plug, let the laptop die at 1%. Open RustPad again and every tab, every unsaved line, and even your cursor position are exactly where you left them. It has never once asked "Do you want to save changes?" and it never will.
+🛟 **Never loses your work.** Every keystroke is saved to disk within half a second. Close the window, kill the process, pull the plug, let the laptop die at 1%. Open RustPad again and every tab, every unsaved line, and even your cursor position are exactly where you left them. It has never once asked "Do you want to save changes?" and it never will.
 
-**Nothing to learn.** Tabs, a menu bar, find and replace, a status bar. The same conventions and shortcuts you already know from every text editor you have ever used. There is no tutorial because there is nothing to tutor.
+🧠 **Nothing to learn.** Tabs, a menu bar, find and replace, a status bar. The same conventions and shortcuts you already know from every text editor you have ever used. There is no tutorial because there is nothing to tutor.
 
-**Just works.** Files are saved atomically, permissions are kept, symlinks are respected, and Windows or Unix line endings are preserved exactly as they were. Your text files stay ordinary text files, readable by anything, including your future self with a different editor.
+✅ **Just works.** Files are saved atomically, permissions are kept, symlinks are respected, and CRLF or LF line endings are preserved exactly as they were. Your text files stay ordinary text files, readable by anything, including your future self with a different editor.
 
-## Screenshots
+## 📸 Screenshots
 
 <table>
   <tr>
@@ -43,7 +41,7 @@ It's Rust. It opens, it saves, it stays out of your way. That's it.
     <td align="center"><img src="docs/screenshots/file-menu.png" alt="File menu" width="440"><br><sub>Real menus with real shortcuts, recently closed tabs included</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/screenshots/settings.png" alt="Settings" width="440"><br><sub>Settings: theme, title bar, zoom, word wrap, status bar. That is all of them</sub></td>
+    <td align="center"><img src="docs/screenshots/settings.png" alt="Settings" width="440"><br><sub>Settings: theme, title bar, zoom, font, word wrap, status bar. That is all of them</sub></td>
     <td align="center"><img src="docs/screenshots/editor-light.png" alt="Light theme" width="440"><br><sub>Light, dark, system, or your Omarchy theme, switched live</sub></td>
   </tr>
   <tr>
@@ -51,19 +49,42 @@ It's Rust. It opens, it saves, it stays out of your way. That's it.
   </tr>
 </table>
 
-## Features
+## ✨ Features
+
+### 📝 Editing
 
 - **Tabs that remember.** Each tab keeps its own undo history, cursor, and scroll position across restarts.
-- **Close for now, or discard for good.** Closing a tab keeps its recovery copy, and closing the last tab closes RustPad. *File ▸ Recently closed* or `Ctrl+Shift+T` brings it back. *Discard changes and close* is the only way to lose text, and it asks first.
 - **Find and replace** with match counting, match case, whole word, and regular expressions. `Ctrl+F`, `Ctrl+H`, `F3`, `Shift+F3`. Go to line with `Ctrl+G`.
 - **Zoom** with `Ctrl` + wheel, `Ctrl+Plus`, `Ctrl+Minus`, `Ctrl+0`. Word wrap and status bar toggles in the *View* menu.
 - **Native printing** through the system print dialog. Time and date stamp with `F5`.
-- **Right-to-left text just works.** Arabic, Hebrew and Persian lines flow and align the way they should. Pair your monospace font with an Arabic face in Settings and both scripts look right side by side.
 - **Line endings preserved.** Opens `CRLF` files and saves them back as `CRLF`. The status bar tells you which.
-- **Open from the terminal.** `rustpad notes.txt todo.md`. A second launch hands its files to the running window.
-- **Follows your desktop.** On [Omarchy](https://omarchy.org) it picks up the active theme's colors automatically and re-themes the moment you run `omarchy theme set`. On tiling compositors the redundant title bar disappears; on GNOME and macOS it stays.
 
-## Install
+### 🛟 Recovery
+
+- **Every keystroke is saved** to a recovery store within half a second. Crash, power cut, or a plain close: reopen and everything is back, including unsaved tabs.
+- **Close for now, or discard for good.** Closing a tab keeps its recovery copy, and closing the last tab closes RustPad. *File ▸ Recently closed* or `Ctrl+Shift+T` brings it back. *Discard changes and close* is the only way to lose text, and it asks first.
+- **Files are saved safely.** A temporary file and an atomic rename, original permissions kept, symlinks written through.
+
+### 🌍 Scripts and fonts
+
+- **Right-to-left text just works.** Arabic, Hebrew and Persian lines flow and align the way they should.
+- **Arabic looks right out of the box.** It is set in Noto Naskh Arabic next to whatever monospace font you use for everything else. Pick any font in Settings and the pairing follows.
+
+### 🖥️ Fits your desktop
+
+- **One Settings menu.** Theme, title bar, zoom, font, word wrap, status bar, and *About RustPad*. `Ctrl+,` opens it. That is the whole list.
+- **Follows your desktop.** On [Omarchy](https://omarchy.org) it picks up the active theme's colors automatically and re-themes the moment you run `omarchy theme set`. Light, dark, system, or your own palette otherwise. On tiling compositors the redundant title bar disappears; on GNOME and macOS it stays.
+- **Open from the terminal.** `rustpad notes.txt todo.md`. A second launch hands its files to the running window.
+
+## 📦 Install
+
+### Quick install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tsubaie/RustPad/main/install.sh | sh
+```
+
+Linux on x86_64. It fetches the latest release for your distro, checks it against the release's `SHA256SUMS`, and installs it with pacman, apt or dnf. On any other Linux it unpacks the tarball into `~/.local`. It compiles nothing, and [the script](install.sh) is short enough to read first.
 
 ### Download a package
 
@@ -117,7 +138,7 @@ install -Dm644 data/icons/com.tsubaie.rustpad.svg ~/.local/share/icons/hicolor/s
 
 Or just run it from the source tree with `cargo run -p rustpad`.
 
-## Configuration
+## ⚙️ Configuration
 
 There is one file, and you will rarely need it: `~/.config/rustpad/config.toml`. RustPad writes it with comments on first launch, keeps it in sync with the Settings dialog, and picks up hand edits immediately.
 
@@ -128,7 +149,7 @@ zoom = 100          # 10-500
 
 [editor]
 word_wrap = true
-font = ""           # empty = system monospace; or e.g. "JetBrainsMono Nerd Font, Noto Naskh Arabic 12"
+font = ""           # empty = system monospace + Noto Naskh Arabic; or e.g. "JetBrainsMono Nerd Font 12"
 
 [window]
 status_bar = true
@@ -154,7 +175,7 @@ menu = "#073642"         # menus and popovers
 
 Palettes drive both the libadwaita widgets and the editor's color scheme, so the whole window follows.
 
-## Keyboard shortcuts
+## ⌨️ Keyboard shortcuts
 
 | Action | Shortcut | Action | Shortcut |
 |---|---|---|---|
@@ -167,14 +188,14 @@ Palettes drive both the libadwaita widgets and the editor's color scheme, so the
 | Next / previous tab | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Settings | `Ctrl+,` |
 | Print | `Ctrl+P` | Exit | `Ctrl+Shift+W` |
 
-Menus open with `Alt+F`, `Alt+E`, `Alt+V`, or `F10`.
+Menus open with `Alt+F`, `Alt+E`, `Alt+V`, `Alt+S`, or `F10`. *About RustPad* lives in the Settings menu.
 
-## How it is built
+## 🔧 How it is built
 
 ```
 crates/rustpad-core   documents, recovery storage, config, themes. No GTK. Unit tested on its own.
-crates/rustpad-gtk    the application: window, tabs, find bar, menus, settings, printing.
-data/                 desktop entry and icon.
+crates/rustpad-gtk    the application: window, tabs, find bar, menus, settings, about, printing.
+data/                 desktop entry, icon, and the logo at the top of this page.
 ```
 
 - **GTK 4 + libadwaita** through `gtk4-rs`, **GtkSourceView 5** for the editor.
@@ -187,17 +208,17 @@ cargo test -p rustpad-core      # core unit tests
 cargo build --release           # optimized binary with LTO
 ```
 
-## Roadmap
+## 🗺️ Roadmap
 
-- Encoding and line-ending controls, external-change detection, recent files, font settings.
+- Encoding and line-ending controls, external-change detection, recent files.
 - Markdown preview, spellcheck, export.
 - Large-file mode, command palette, a carefully permissioned extension model.
 - Optional, provider-neutral writing tools that run locally or with a provider you configure.
 
-## Contributing
+## 🤝 Contributing
 
 Issues and pull requests are welcome. Keep the core toolkit-free and covered by tests, and keep the interface boring in the best way: if a feature needs a manual, it probably does not belong in a plain text editor.
 
-## License
+## 📄 License
 
 RustPad is released under the [MIT License](LICENSE).

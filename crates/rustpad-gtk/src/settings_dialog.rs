@@ -100,9 +100,9 @@ pub fn present(
     let font_row = adw::ActionRow::new();
     font_row.set_title("Font");
     font_row.set_subtitle(if settings.config.editor.font.is_empty() {
-        "Following the system monospace font. Pick one to pair Latin with an Arabic or other script face."
+        "Following the system monospace font, with Noto Naskh Arabic for Arabic text."
     } else {
-        "Edit config.toml to list several families, e.g. \"JetBrainsMono Nerd Font, Noto Naskh Arabic 12\""
+        "Paired with Noto Naskh Arabic for Arabic text. List two families in config.toml to pick another, e.g. \"JetBrainsMono Nerd Font, Amiri 12\""
     });
     let font_button = gtk::FontDialogButton::new(Some(gtk::FontDialog::new()));
     font_button.set_valign(gtk::Align::Center);
@@ -193,35 +193,6 @@ pub fn present(
         files.add(&row);
     }
     page.add(&files);
-
-    // About -------------------------------------------------------------------
-    let about = adw::PreferencesGroup::new();
-    about.set_title("About");
-    let brand = gtk::Box::new(gtk::Orientation::Horizontal, 16);
-    brand.add_css_class("card");
-    brand.set_margin_top(4);
-    let logo = gtk::Image::from_paintable(Some(&crate::theme::logo_texture()));
-    logo.set_pixel_size(72);
-    logo.set_margin_top(14);
-    logo.set_margin_bottom(14);
-    logo.set_margin_start(16);
-    let words = gtk::Box::new(gtk::Orientation::Vertical, 2);
-    words.set_valign(gtk::Align::Center);
-    let name = gtk::Label::new(Some(&format!("RustPad {}", crate::VERSION)));
-    name.add_css_class("title-3");
-    name.set_xalign(0.0);
-    let blurb = gtk::Label::new(Some(
-        "Dead simple, recoverable text editing. GTK 4, libadwaita and GtkSourceView in Rust.",
-    ));
-    blurb.add_css_class("dim-label");
-    blurb.set_xalign(0.0);
-    blurb.set_wrap(true);
-    words.append(&name);
-    words.append(&blurb);
-    brand.append(&logo);
-    brand.append(&words);
-    about.add(&brand);
-    page.add(&about);
 
     let dialog = adw::PreferencesDialog::new();
     dialog.set_title("Settings");

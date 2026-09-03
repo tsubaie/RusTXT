@@ -29,31 +29,42 @@ pub fn logo_texture() -> gtk::gdk::Texture {
         .expect("embedded logo is a valid PNG")
 }
 
+/// The face that renders Arabic (and other right-to-left scripts) whenever the
+/// chosen font does not name one itself. Pango walks the family list in order
+/// and takes the first face that covers each character.
+pub const ARABIC_FONT: &str = "Noto Naskh Arabic";
+
 /// CSS for the editor font: the configured description (or the system
-/// monospace font when empty) scaled by the zoom percentage.
+/// monospace font when empty) scaled by the zoom percentage, with
+/// [`ARABIC_FONT`] appended unless the description already pairs a second
+/// family.
 pub fn editor_font_css(font: &str, zoom: u32) -> String {
     let scale = zoom as f64 / 100.0;
     let font = font.trim();
     if font.is_empty() {
         return format!(
-            "textview.rustpad-editor {{ font-size: {:.1}px; }}",
+            "textview.rustpad-editor {{ font-family: monospace, \"{ARABIC_FONT}\"; font-size: {:.1}px; }}",
             15.0 * scale
         );
     }
     let description = gtk::pango::FontDescription::from_string(font);
-    let families: Vec<String> = description
+    let mut families: Vec<String> = description
         .family()
         .map(|list| {
             list.split(',')
                 .map(str::trim)
                 .filter(|family| !family.is_empty())
-                .map(|family| format!("\"{family}\""))
+                .map(str::to_string)
                 .collect()
         })
         .unwrap_or_default();
+    if families.len() == 1 && !families[0].eq_ignore_ascii_case(ARABIC_FONT) {
+        families.push(ARABIC_FONT.to_string());
+    }
     let mut rules = Vec::new();
     if !families.is_empty() {
-        rules.push(format!("font-family: {};", families.join(", ")));
+        let quoted: Vec<String> = families.iter().map(|f| format!("\"{f}\"")).collect();
+        rules.push(format!("font-family: {};", quoted.join(", ")));
     }
     let points = description.size() as f64 / gtk::pango::SCALE as f64;
     let base_px = if description.size() > 0 {

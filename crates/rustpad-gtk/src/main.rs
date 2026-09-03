@@ -1,6 +1,7 @@
 //! RustPad: a dead simple, recoverable plain text editor
 //! built with GTK 4, libadwaita and GtkSourceView on top of `rustpad-core`.
 
+mod about_dialog;
 mod document;
 mod find_bar;
 mod menus;

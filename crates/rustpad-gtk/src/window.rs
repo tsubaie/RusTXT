@@ -20,6 +20,7 @@ use std::{
 };
 
 use crate::{
+    about_dialog,
     document::Document,
     find_bar::FindBar,
     menus::{self, Menus},
@@ -830,6 +831,7 @@ impl RustPadWindow {
         });
         self.window.add_action(&reopen);
         self.add_action("settings", |w| w.open_settings());
+        self.add_action("about", |w| about_dialog::present(&w.window));
         self.add_action("exit", |w| w.window.close());
 
         self.add_action("undo", |w| {

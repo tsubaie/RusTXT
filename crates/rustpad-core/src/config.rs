@@ -21,9 +21,10 @@ pub const CONFIG_HEADER: &str = "\
 #   light/dark setting), \"system\", \"light\", \"dark\", \"omarchy\", or the name of a
 #   file in the themes/ directory next to this file (without .toml).
 # appearance.zoom: editor zoom percentage, 10-500.
-# editor.font: empty follows the system monospace font. Otherwise a font
-#   description such as \"JetBrainsMono Nerd Font, Noto Naskh Arabic 12\"; a
-#   comma-separated list lets a second font cover Arabic or other scripts.
+# editor.font: empty follows the system monospace font, with Noto Naskh Arabic
+#   for Arabic text. A single family such as \"JetBrainsMono Nerd Font 12\" is
+#   paired with Noto Naskh Arabic the same way; list two families yourself,
+#   e.g. \"JetBrainsMono Nerd Font, Amiri 12\", to choose a different Arabic face.
 # window.title_bar: \"auto\" hides the native title bar on tiling compositors such
 #   as Hyprland and keeps it elsewhere; \"show\" and \"hide\" force it.
 #
@@ -59,9 +60,9 @@ impl Default for Appearance {
 #[serde(default)]
 pub struct EditorConfig {
     pub word_wrap: bool,
-    /// Pango font description such as "JetBrainsMono Nerd Font, Noto Naskh Arabic 12".
-    /// A comma-separated family list lets a second font cover other scripts.
-    /// Empty follows the system monospace font.
+    /// Pango font description such as "JetBrainsMono Nerd Font 12". Empty follows
+    /// the system monospace font. Noto Naskh Arabic covers Arabic unless a
+    /// comma-separated list names a second family, e.g. "Fira Code, Amiri 12".
     pub font: String,
 }
 

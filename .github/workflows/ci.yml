@@ -1,9 +1,22 @@
 name: CI
 
+# Skipped for documentation-only changes; the release workflow builds the
+# packages, so this only has to prove the tree formats, tests and builds.
 on:
   push:
     branches: [main]
+    paths-ignore: ["**.md", "docs/**", "LICENSE"]
   pull_request:
+    paths-ignore: ["**.md", "docs/**", "LICENSE"]
+
+# A newer push to the same branch cancels the run that is still going.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
 
 jobs:
   test:
@@ -14,6 +27,12 @@ jobs:
       - name: Install toolchain and GTK
         run: pacman -Syu --noconfirm rust gtk4 libadwaita gtksourceview5 git
       - uses: actions/checkout@v4
+      # Shared with the release workflow's Arch job: same image, same compiler.
+      - name: Cache cargo registry and build output
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: arch-linux
+          cache-on-failure: true
       - name: Format check
         run: cargo fmt --all -- --check
       - name: Tests
