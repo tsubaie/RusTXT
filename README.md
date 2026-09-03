@@ -10,10 +10,8 @@
 </p>
 
 <p align="center">
-  <img alt="Rust" src="https://img.shields.io/badge/Rust-2021-orange?logo=rust&logoColor=white">
-  <img alt="GTK 4" src="https://img.shields.io/badge/GTK-4-4a86cf?logo=gtk&logoColor=white">
-  <img alt="libadwaita" src="https://img.shields.io/badge/libadwaita-1.6%2B-7c4dff">
-  <img alt="Platforms" src="https://img.shields.io/badge/Linux%20%7C%20macOS-native-2ea44f">
+  <img alt="Linux and macOS" src="https://img.shields.io/badge/Linux%20%7C%20macOS-native-2ea44f">
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue">
 </p>
 
 <p align="center">
@@ -26,11 +24,11 @@
 
 **Opens instantly.** A real native app, not a browser in a box. Around 3 MB on disk, and it is on screen before you finish reaching for the keyboard.
 
-**Never loses your work.** Every keystroke is saved to disk within half a second. Close the window, kill the process, pull the plug. Open RustPad again and every tab, every unsaved line, and even your cursor position are exactly where you left them. No prompts, no "Do you want to save?" nagging.
+**Never loses your work.** Every keystroke is saved within half a second. Close the window, kill the process, pull the plug. Open RustPad again and every tab, every unsaved line, and even your cursor position are exactly where you left them. No prompts, no "Do you want to save?" nagging.
 
 **Nothing to learn.** Tabs, a menu bar, find and replace, a status bar. The same conventions and shortcuts you already know from every text editor since Notepad. That is the whole interface.
 
-**Just works.** Files are saved atomically, permissions are kept, symlinks are respected, and Windows or Unix line endings are preserved exactly as they were. Your text files stay ordinary text files.
+**Just works.** Files are saved safely, permissions are kept, symlinks are respected, and Windows or Unix line endings are preserved exactly as they were. Your text files stay ordinary text files.
 
 ## Screenshots
 
@@ -51,14 +49,12 @@
 - **Close for now, or discard for good.** Closing a tab keeps its recovery copy. *File ▸ Recently closed* or `Ctrl+Shift+T` brings it back. *Discard changes and close* is the only way to lose text, and it asks first.
 - **Find and replace** with match counting, match case, whole word, and regular expressions. `Ctrl+F`, `Ctrl+H`, `F3`, `Shift+F3`. Go to line with `Ctrl+G`.
 - **Zoom** with `Ctrl` + wheel, `Ctrl+Plus`, `Ctrl+Minus`, `Ctrl+0`. Word wrap and status bar toggles in the *View* menu.
-- **Native printing** through the system print dialog. Time and date stamp with `F5`.
+- **Printing** through your system's print dialog. Time and date stamp with `F5`.
 - **Line endings preserved.** Opens `CRLF` files and saves them back as `CRLF`. The status bar tells you which.
 - **Open from the terminal.** `rustpad notes.txt todo.md`. A second launch hands its files to the running window.
-- **Follows your desktop.** On [Omarchy](https://omarchy.org) it picks up the active theme's colors automatically and re-themes the moment you run `omarchy theme set`. On tiling compositors the redundant title bar disappears; on GNOME and macOS it stays.
+- **Follows your desktop.** On [Omarchy](https://omarchy.org) it picks up the active theme's colors automatically and re-themes the moment you run `omarchy theme set`. On tiling window managers the redundant title bar disappears; on GNOME and macOS it stays.
 
 ## Install
-
-### Download a package
 
 Grab the latest build from the [Releases page](https://github.com/tsubaie/RustPad/releases/latest):
 
@@ -69,50 +65,32 @@ Grab the latest build from the [Releases page](https://github.com/tsubaie/RustPa
 | Fedora 42+ | `rustpad-*.x86_64.rpm` | `sudo dnf install ./rustpad-*.x86_64.rpm` |
 | Any Linux | `rustpad-*-x86_64-linux.tar.gz` | extract, then `./install.sh` |
 
-RustPad needs GTK 4.16, libadwaita 1.6 and GtkSourceView 5 or newer, which rules out Debian 12 and Ubuntu 24.04. Every release ships a `SHA256SUMS` file.
+RustPad needs a current distribution release: Debian 13, Ubuntu 25.04, Fedora 42 or newer, or any up-to-date Arch. Every release ships a `SHA256SUMS` file.
 
-### Build from source
-
-**Arch Linux / Omarchy**
-
-```bash
-omarchy pkg add gtk4 libadwaita gtksourceview5      # or: sudo pacman -S gtk4 libadwaita gtksourceview5
-cargo install --path crates/rustpad-gtk
-```
-
-**Debian / Ubuntu**
+<details>
+<summary>Build from source</summary>
 
 ```bash
+# Arch / Omarchy
+sudo pacman -S gtk4 libadwaita gtksourceview5
+# Debian / Ubuntu
 sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev
-cargo install --path crates/rustpad-gtk
-```
-
-**Fedora**
-
-```bash
+# Fedora
 sudo dnf install gtk4-devel libadwaita-devel gtksourceview5-devel
-cargo install --path crates/rustpad-gtk
-```
-
-**macOS**
-
-```bash
+# macOS
 brew install gtk4 libadwaita gtksourceview5
+
 cargo install --path crates/rustpad-gtk
-```
-
-Then add the launcher entry and icon (Linux):
-
-```bash
 install -Dm644 data/com.tsubaie.rustpad.desktop ~/.local/share/applications/com.tsubaie.rustpad.desktop
 install -Dm644 data/icons/com.tsubaie.rustpad.svg ~/.local/share/icons/hicolor/scalable/apps/com.tsubaie.rustpad.svg
 ```
 
-Or just run it from the source tree with `cargo run -p rustpad`.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the project is put together.
+</details>
 
-## Configuration
+## Settings
 
-There is one file, and you will rarely need it: `~/.config/rustpad/config.toml`. RustPad writes it with comments on first launch, keeps it in sync with the Settings dialog, and picks up hand edits immediately.
+There is one settings file, and you will rarely need it: `~/.config/rustpad/config.toml`. RustPad writes it with comments on first launch, keeps it in sync with the Settings dialog, and picks up hand edits immediately.
 
 ```toml
 [appearance]
@@ -127,7 +105,7 @@ status_bar = true
 title_bar = "auto"  # "auto", "show", "hide"
 ```
 
-### Themes
+### Your own theme
 
 `auto` follows your Omarchy theme when one is installed and the system light/dark setting otherwise. To make your own, drop a file in `~/.config/rustpad/themes/` and set `theme` to its name:
 
@@ -144,7 +122,7 @@ chrome = "#00212b"       # tab strip and window
 menu = "#073642"         # menus and popovers
 ```
 
-Palettes drive both the libadwaita widgets and the editor's color scheme, so the whole window follows.
+The colors apply to the whole window, not just the text area.
 
 ## Keyboard shortcuts
 
@@ -161,34 +139,16 @@ Palettes drive both the libadwaita widgets and the editor's color scheme, so the
 
 Menus open with `Alt+F`, `Alt+E`, `Alt+V`, or `F10`.
 
-## How it is built
+## Coming next
 
-```
-crates/rustpad-core   documents, recovery storage, config, themes. No GTK. Unit tested on its own.
-crates/rustpad-gtk    the application: window, tabs, find bar, menus, settings, printing.
-data/                 desktop entry and icon.
-```
-
-- **GTK 4 + libadwaita** through `gtk4-rs`, **GtkSourceView 5** for the editor.
-- **SQLite** (WAL mode) for tabs, unsaved snapshots, cursor and scroll positions, and recently closed tabs. Only the tab you are typing in is written, and only after you pause.
-- **TOML** configuration watched with `notify` so edits and theme changes apply live.
-- Saves go through a temporary file and an atomic rename, keep the original permissions, and write through symlinks.
-
-```bash
-cargo test -p rustpad-core      # core unit tests
-cargo build --release           # optimized binary with LTO
-```
-
-## Roadmap
-
-- Encoding and line-ending controls, external-change detection, recent files, font settings.
+- Encoding and line-ending controls, notice when a file changes on disk, recent files, font settings.
 - Markdown preview, spellcheck, export.
 - Large-file mode, command palette, a carefully permissioned extension model.
-- Optional, provider-neutral writing tools that run locally or with a provider you configure.
+- Optional writing tools that run locally or with a provider you configure.
 
 ## Contributing
 
-Issues and pull requests are welcome. Keep the core toolkit-free and covered by tests, and keep the interface boring in the best way: if a feature needs a manual, it probably does not belong in a notepad.
+Issues and pull requests are welcome. Keep the interface boring in the best way: if a feature needs a manual, it probably does not belong in a notepad.
 
 ## License
 
