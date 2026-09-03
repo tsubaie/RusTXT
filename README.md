@@ -25,7 +25,7 @@
 
 ## Why RustPad
 
-You wanted to write down a phone number. Your editor wanted to update, sync, sign you in, and recommend an extension. RustPad just opened.
+It's Rust. It opens, it saves, it stays out of your way. That's it.
 
 **Opens instantly.** A real native app, not a browser in a box. Around 3 MB on disk, and it is on screen before you finish reaching for the keyboard. Your thought is still fresh when the cursor starts blinking.
 
