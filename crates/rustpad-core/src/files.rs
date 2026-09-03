@@ -42,6 +42,17 @@ pub fn read_document(path: &str) -> Result<DocumentState, String> {
     })
 }
 
+/// Write `state.content` to `path` with the document's line endings and
+/// update the state to point at the saved file.
+pub fn save_document(state: &mut DocumentState, path: &Path) -> Result<(), String> {
+    let bytes = encode(&state.content, state.line_ending);
+    atomic_save(path, bytes.as_bytes())?;
+    state.title = title_for(path);
+    state.file_path = Some(path.to_string_lossy().into_owned());
+    state.dirty = false;
+    Ok(())
+}
+
 /// Clean file-backed documents restored from the database may be stale: the
 /// file is authoritative, so reload it. If the file is gone, keep the snapshot
 /// and mark it dirty so the user knows it is no longer on disk.
@@ -145,6 +156,20 @@ mod tests {
             .unwrap()
             .file_type()
             .is_symlink());
+    }
+
+    #[test]
+    fn save_document_encodes_line_endings_and_updates_state() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("notes.txt");
+        let mut state = DocumentState::untitled(std::iter::empty(), LineEnding::Crlf);
+        state.content = "one\ntwo".into();
+        state.dirty = true;
+        save_document(&mut state, &path).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"one\r\ntwo");
+        assert_eq!(state.title, "notes.txt");
+        assert_eq!(state.file_path.as_deref(), Some(path.to_str().unwrap()));
+        assert!(!state.dirty);
     }
 
     #[test]
