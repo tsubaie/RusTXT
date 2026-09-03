@@ -66,7 +66,24 @@ Recovery snapshots should be debounced during editing and flushed when focus cha
 
 The Rust application core should not depend directly on Tauri-specific types. The interface communicates with it through a small typed command and event boundary, allowing the core document, storage, search, and recovery services to be tested independently.
 
+## Development
+
+Prerequisites are Node.js, npm, the stable Rust toolchain, and the platform dependencies required by Tauri 2.
+
+```bash
+npm install
+npm run tauri dev
+```
+
+Validation commands:
+
+```bash
+npm run build
+cargo test --manifest-path src-tauri/Cargo.toml
+cargo check --manifest-path src-tauri/Cargo.toml
+npm run tauri build -- --debug --no-bundle
+```
+
 ## Status
 
-Planning. Implementation begins with V1.
-
+V1 is implemented on the `feat/v1` branch: plain-text file operations, multiple tabs, undo/redo, keyboard shortcuts, light/dark themes, SQLite-backed recovery, and automatic session restoration.
