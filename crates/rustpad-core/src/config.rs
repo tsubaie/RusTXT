@@ -21,6 +21,9 @@ pub const CONFIG_HEADER: &str = "\
 #   light/dark setting), \"system\", \"light\", \"dark\", \"omarchy\", or the name of a
 #   file in the themes/ directory next to this file (without .toml).
 # appearance.zoom: editor zoom percentage, 10-500.
+# editor.font: empty follows the system monospace font. Otherwise a font
+#   description such as \"JetBrainsMono Nerd Font, Noto Naskh Arabic 12\"; a
+#   comma-separated list lets a second font cover Arabic or other scripts.
 # window.title_bar: \"auto\" hides the native title bar on tiling compositors such
 #   as Hyprland and keeps it elsewhere; \"show\" and \"hide\" force it.
 #
@@ -56,11 +59,18 @@ impl Default for Appearance {
 #[serde(default)]
 pub struct EditorConfig {
     pub word_wrap: bool,
+    /// Pango font description such as "JetBrainsMono Nerd Font, Noto Naskh Arabic 12".
+    /// A comma-separated family list lets a second font cover other scripts.
+    /// Empty follows the system monospace font.
+    pub font: String,
 }
 
 impl Default for EditorConfig {
     fn default() -> Self {
-        Self { word_wrap: true }
+        Self {
+            word_wrap: true,
+            font: String::new(),
+        }
     }
 }
 
