@@ -13,33 +13,86 @@ The goal is to keep everyday text editing immediate and uncluttered while buildi
 - Use native operating-system behavior where it matters.
 - Keep AI and cloud functionality optional.
 
-## Planned stack
+## Stack
 
 - **Desktop shell:** Tauri 2
 - **Editor:** CodeMirror 6
-- **Application core:** Rust
+- **Application core:** Rust, split into Tauri-free modules (`storage`, `files`, `config`, `desktop`, `watch`) behind a thin `commands` boundary
 - **Recovery and session state:** SQLite through `rusqlite`, using WAL mode
-- **Async work:** Tokio
-- **File watching:** `notify`
-- **Text encodings:** `encoding_rs`
-- **Diagnostics:** `tracing`
+- **Configuration:** TOML in the XDG config directory, watched with `notify` for live reload
 - **Packaging and updates:** Tauri bundles and updater
 
-The filesystem remains authoritative for saved documents. SQLite stores open tabs, unsaved snapshots, cursor and scroll positions, recent files, and crash-recovery metadata.
+The filesystem remains authoritative for saved documents. SQLite stores open tabs, unsaved snapshots, cursor and scroll positions, recently closed tabs, and crash-recovery metadata.
+
+## What works today (V1)
+
+- Tabs with per-tab undo history, a `+` button, middle-click close, and a right-click tab menu.
+- Windows 11 Notepad style menu bar: **File**, **Edit**, **View**, and a settings gear. Menus support hover switching, submenus, check marks, shortcut hints, keyboard navigation, and `Alt+F` / `Alt+E` / `Alt+V`.
+- Find and replace in a small floating tool window over the text (`Ctrl+F`, `Ctrl+H`), with match count, match case, whole word, and regular expressions. Go to line with `Ctrl+G`.
+- Cut, copy, paste, and delete from the menu through the system clipboard; select all; insert time and date with `F5`; print with `Ctrl+P`.
+- Zoom (`Ctrl` + wheel, `Ctrl+Plus`, `Ctrl+Minus`, `Ctrl+0`), word wrap, and status bar toggles.
+- Atomic saves that preserve file permissions and write through symlinks. Line endings are detected on open and preserved on save; the status bar shows `Windows (CRLF)` or `Unix (LF)`.
+- Crash-safe recovery: content snapshots are written 400 ms after edits, only for the document that changed. Clean file-backed tabs are re-read from disk on restart so the file stays authoritative.
+- "Close for now" keeps a tab's recovery snapshot; **File ▸ Recently closed** and `Ctrl+Shift+T` bring it back. "Discard changes and close" deletes the snapshot after confirmation.
+
+## Configuration
+
+All settings live in `~/.config/rustpad/config.toml` (`$XDG_CONFIG_HOME/rustpad/config.toml`). RustPad writes a commented default on first launch, and every change made in the Settings page or the View menu is saved back to that file. Edits made to the file by hand apply immediately while RustPad is running.
+
+```toml
+[appearance]
+theme = "auto"   # "auto", "system", "light", "dark", "omarchy", or a custom theme name
+zoom = 100       # 10-500
+
+[editor]
+word_wrap = true
+
+[window]
+status_bar = true
+title_bar = "auto"  # "auto", "show", "hide"
+```
+
+### Themes
+
+- `auto` follows the active [Omarchy](https://omarchy.org) theme when one is installed, and the system light/dark preference otherwise.
+- `system`, `light`, and `dark` are the built-in Notepad-like looks.
+- `omarchy` reads the active theme's `colors.toml` from `~/.local/state/omarchy/current/theme/` and re-applies whenever `omarchy theme set` runs. A theme may also ship its own `rustpad.toml` in that directory to override the derived mapping.
+- Any other name loads `~/.config/rustpad/themes/<name>.toml`:
+
+```toml
+mode = "dark"            # "dark" or "light"
+background = "#1e1e2e"   # editor background
+foreground = "#cdd6f4"
+accent = "#89b4fa"       # optional; the rest are optional too
+muted = "#6c7086"
+selection = "#45475a"
+border = "#313244"
+chrome = "#161622"       # tab strip
+menu = "#313244"         # menus and popups
+```
+
+### Window title bar
+
+Tauri windows ask for native decorations, and on Wayland GTK draws its own header bar when the compositor does not. Tiling compositors such as Hyprland, Sway, river, and niri never draw one, so `title_bar = "auto"` hides the GTK bar there and keeps native decorations on GNOME, KDE, Windows, and macOS. The tab strip doubles as a drag handle when the bar is hidden.
+
+## Session behavior
+
+RustPad deliberately distinguishes among these actions:
+
+- **Close for now:** hide the tab while retaining its recovery state; reopen it from **File ▸ Recently closed**.
+- **Discard changes:** explicitly and permanently remove the unsaved recovery snapshot.
+- **Save:** atomically write the document to disk and update its recovery state.
+- **Exit:** preserve all open tabs without forcing save prompts.
 
 ## Roadmap
 
-### V1 — Reliable editing
-
-Plain-text editing, multiple tabs, open/save, unsaved indicators, close-without-saving behavior, crash-safe recovery, and automatic session restoration.
-
 ### V2 — Everyday editor tools
 
-Find and replace, encoding and line-ending controls, external-file change detection, recent files, themes, and configurable editor preferences.
+Encoding and line-ending controls, external-file change detection, recent files, and font settings.
 
 ### V3 — Rich text workflows
 
-Markdown formatting and preview, spellcheck, printing, and export-oriented improvements.
+Markdown formatting and preview, spellcheck, and export-oriented improvements.
 
 ### V4 — Power-user foundation
 
@@ -48,23 +101,6 @@ Large-file mode, command palette, advanced navigation, and a carefully permissio
 ### V5 — Optional Writing Tools
 
 Provider-neutral rewrite, summarize, and compose actions backed by local models or user-configured cloud providers.
-
-Each roadmap version has a corresponding GitHub issue with its scope and acceptance criteria.
-
-## Session behavior
-
-RustPad deliberately distinguishes among these actions:
-
-- **Close for now:** hide the tab while retaining its recovery state.
-- **Discard changes:** explicitly and permanently remove the unsaved recovery snapshot.
-- **Save:** atomically write the document to disk and update its recovery state.
-- **Exit:** preserve all open tabs without forcing save prompts.
-
-Recovery snapshots should be debounced during editing and flushed when focus changes or the application begins closing. Normal file saves should use a temporary file followed by an atomic replacement where supported.
-
-## Architecture direction
-
-The Rust application core should not depend directly on Tauri-specific types. The interface communicates with it through a small typed command and event boundary, allowing the core document, storage, search, and recovery services to be tested independently.
 
 ## Development
 
@@ -84,6 +120,4 @@ cargo check --manifest-path src-tauri/Cargo.toml
 npm run tauri build -- --debug --no-bundle
 ```
 
-## Status
-
-V1 is implemented on the `feat/v1` branch: plain-text file operations, multiple tabs, undo/redo, keyboard shortcuts, light/dark themes, SQLite-backed recovery, and automatic session restoration.
+The Rust core never depends on Tauri types outside `commands.rs` and `lib.rs`, so storage, file handling, configuration, theme resolution, and desktop detection are unit-tested on their own.

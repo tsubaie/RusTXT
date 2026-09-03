@@ -1,0 +1,194 @@
+//! Reading and atomically writing documents on disk. Tauri-free.
+
+use crate::storage::{DocumentState, LineEnding};
+use std::{
+    fs,
+    io::Write,
+    path::{Path, PathBuf},
+};
+
+pub fn title_for(path: &Path) -> String {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("Untitled")
+        .to_string()
+}
+
+/// Convert any line-break style to `\n` for in-memory editing.
+pub fn normalize(text: &str) -> String {
+    text.replace("\r\n", "\n")
+}
+
+/// Re-apply the document's line-ending style for writing to disk.
+pub fn encode(content: &str, line_ending: LineEnding) -> String {
+    match line_ending {
+        LineEnding::Lf => content.to_string(),
+        LineEnding::Crlf => content.replace('\n', "\r\n"),
+    }
+}
+
+pub fn read_document(path: &str) -> Result<DocumentState, String> {
+    let raw = fs::read_to_string(path).map_err(|error| format!("Could not open file: {error}"))?;
+    Ok(DocumentState {
+        id: uuid::Uuid::new_v4().to_string(),
+        title: title_for(Path::new(path)),
+        file_path: Some(path.to_string()),
+        line_ending: LineEnding::detect(&raw),
+        content: normalize(&raw),
+        dirty: false,
+        cursor_offset: 0,
+        scroll_top: 0.0,
+        tab_position: 0,
+    })
+}
+
+/// Clean file-backed documents restored from the database may be stale: the
+/// file is authoritative, so reload it. If the file is gone, keep the snapshot
+/// and mark it dirty so the user knows it is no longer on disk.
+pub fn refresh_from_disk(documents: &mut [DocumentState]) {
+    for document in documents.iter_mut().filter(|d| !d.dirty) {
+        let Some(path) = document.file_path.as_deref() else {
+            continue;
+        };
+        match fs::read_to_string(path) {
+            Ok(raw) => {
+                document.line_ending = LineEnding::detect(&raw);
+                document.content = normalize(&raw);
+            }
+            Err(_) => document.dirty = true,
+        }
+    }
+}
+
+/// Write through a temporary file in the same directory, then rename it over
+/// the target. Follows symlinks so the linked file is updated rather than the
+/// link replaced, and preserves the existing file's permissions.
+pub fn atomic_save(path: &Path, content: &[u8]) -> Result<(), String> {
+    let target = resolve_symlink(path);
+    let parent = target
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let existing_permissions = fs::metadata(&target).ok().map(|meta| meta.permissions());
+
+    let mut temporary = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
+    temporary.write_all(content).map_err(|e| e.to_string())?;
+    temporary.as_file().sync_all().map_err(|e| e.to_string())?;
+    if let Some(permissions) = existing_permissions {
+        temporary
+            .as_file()
+            .set_permissions(permissions)
+            .map_err(|e| e.to_string())?;
+    }
+    temporary
+        .persist(&target)
+        .map_err(|e| e.error.to_string())?;
+    Ok(())
+}
+
+fn resolve_symlink(path: &Path) -> PathBuf {
+    match fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => {
+            fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+        }
+        _ => path.to_path_buf(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn atomic_save_replaces_content() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("note.txt");
+        fs::write(&path, "old").unwrap();
+        atomic_save(&path, b"new").unwrap();
+        assert_eq!(fs::read_to_string(path).unwrap(), "new");
+    }
+
+    #[test]
+    fn atomic_save_creates_missing_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("fresh.txt");
+        atomic_save(&path, b"hello").unwrap();
+        assert_eq!(fs::read_to_string(path).unwrap(), "hello");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_save_preserves_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("script.sh");
+        fs::write(&path, "old").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        atomic_save(&path, b"new").unwrap();
+        assert_eq!(
+            fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o755
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_save_writes_through_symlink() {
+        let dir = tempfile::tempdir().unwrap();
+        let real = dir.path().join("real.txt");
+        let link = dir.path().join("link.txt");
+        fs::write(&real, "old").unwrap();
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        atomic_save(&link, b"new").unwrap();
+        assert_eq!(fs::read_to_string(&real).unwrap(), "new");
+        assert!(fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+    }
+
+    #[test]
+    fn read_document_detects_and_normalizes_crlf() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("win.txt");
+        fs::write(&path, "a\r\nb\r\n").unwrap();
+        let doc = read_document(path.to_str().unwrap()).unwrap();
+        assert_eq!(doc.line_ending, LineEnding::Crlf);
+        assert_eq!(doc.content, "a\nb\n");
+        assert_eq!(encode(&doc.content, doc.line_ending), "a\r\nb\r\n");
+    }
+
+    #[test]
+    fn refresh_reloads_clean_documents_and_flags_missing_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let present = dir.path().join("present.txt");
+        fs::write(&present, "on disk").unwrap();
+        let base = |id: &str, path: &Path, dirty: bool| DocumentState {
+            id: id.into(),
+            file_path: Some(path.to_string_lossy().into_owned()),
+            title: title_for(path),
+            content: "snapshot".into(),
+            dirty,
+            cursor_offset: 0,
+            scroll_top: 0.0,
+            tab_position: 0,
+            line_ending: LineEnding::Lf,
+        };
+        let mut docs = vec![
+            base("clean", &present, false),
+            base("dirty", &present, true),
+            base("missing", &dir.path().join("gone.txt"), false),
+        ];
+        refresh_from_disk(&mut docs);
+        assert_eq!(docs[0].content, "on disk");
+        assert_eq!(
+            docs[1].content, "snapshot",
+            "dirty snapshots are never overwritten"
+        );
+        assert!(
+            docs[2].dirty,
+            "missing file leaves the snapshot marked unsaved"
+        );
+        assert_eq!(docs[2].content, "snapshot");
+    }
+}
