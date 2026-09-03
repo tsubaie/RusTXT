@@ -26,7 +26,7 @@
 
 **Opens instantly.** A real native app, not a browser in a box. Around 3 MB on disk, and it is on screen before you finish reaching for the keyboard.
 
-**Never loses your work.** Every keystroke is snapshotted to a local SQLite database within half a second. Close the window, kill the process, pull the plug. Open RustPad again and every tab, every unsaved line, and even your cursor position are exactly where you left them. No prompts, no "Do you want to save?" nagging.
+**Never loses your work.** Every keystroke is saved to disk within half a second. Close the window, kill the process, pull the plug. Open RustPad again and every tab, every unsaved line, and even your cursor position are exactly where you left them. No prompts, no "Do you want to save?" nagging.
 
 **Nothing to learn.** Tabs, a menu bar, find and replace, a status bar. The same conventions and shortcuts you already know from every text editor since Notepad. That is the whole interface.
 
