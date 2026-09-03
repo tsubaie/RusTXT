@@ -129,7 +129,7 @@ pub fn build() -> Menus {
 /// menu items show their shortcuts and work when focus is elsewhere.
 pub fn install_accelerators(app: &impl IsA<gtk::Application>) {
     let accels: &[(&str, &[&str])] = &[
-        ("win.new-tab", &["<Control>n"]),
+        ("win.new-tab", &["<Control>n", "<Control>t"]),
         ("win.open", &["<Control>o"]),
         ("win.save", &["<Control>s"]),
         ("win.save-as", &["<Control><Shift>s"]),
