@@ -29,6 +29,67 @@ pub fn logo_texture() -> gtk::gdk::Texture {
         .expect("embedded logo is a valid PNG")
 }
 
+/// CSS for the editor font: the configured description (or the system
+/// monospace font when empty) scaled by the zoom percentage.
+pub fn editor_font_css(font: &str, zoom: u32) -> String {
+    let scale = zoom as f64 / 100.0;
+    let font = font.trim();
+    if font.is_empty() {
+        return format!(
+            "textview.rustpad-editor {{ font-size: {:.1}px; }}",
+            15.0 * scale
+        );
+    }
+    let description = gtk::pango::FontDescription::from_string(font);
+    let families: Vec<String> = description
+        .family()
+        .map(|list| {
+            list.split(',')
+                .map(str::trim)
+                .filter(|family| !family.is_empty())
+                .map(|family| format!("\"{family}\""))
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut rules = Vec::new();
+    if !families.is_empty() {
+        rules.push(format!("font-family: {};", families.join(", ")));
+    }
+    let points = description.size() as f64 / gtk::pango::SCALE as f64;
+    let base_px = if description.size() > 0 {
+        if description.is_size_absolute() {
+            points
+        } else {
+            points * 96.0 / 72.0
+        }
+    } else {
+        15.0
+    };
+    rules.push(format!("font-size: {:.1}px;", base_px * scale));
+    if description.style() == gtk::pango::Style::Italic {
+        rules.push("font-style: italic;".into());
+    }
+    use gtk::pango::Weight;
+    let weight = match description.weight() {
+        Weight::Thin => 100,
+        Weight::Ultralight => 200,
+        Weight::Light => 300,
+        Weight::Semilight => 350,
+        Weight::Book => 380,
+        Weight::Medium => 500,
+        Weight::Semibold => 600,
+        Weight::Bold => 700,
+        Weight::Ultrabold => 800,
+        Weight::Heavy => 900,
+        Weight::Ultraheavy => 1000,
+        _ => 400,
+    };
+    if weight != 400 {
+        rules.push(format!("font-weight: {weight};"));
+    }
+    format!("textview.rustpad-editor {{ {} }}", rules.join(" "))
+}
+
 /// Add the static application stylesheet once.
 pub fn install_base_css() {
     let provider = gtk::CssProvider::new();

@@ -571,10 +571,9 @@ impl RustPadWindow {
         let settings = config::settings(&self.paths);
         let applied = theme::apply(&settings.theme, &self.theme_css, &self.paths.cache_dir);
         *self.scheme.borrow_mut() = applied.scheme.clone();
-        let zoom = settings.config.appearance.zoom;
-        self.zoom_css.load_from_string(&format!(
-            "textview.rustpad-editor {{ font-size: {:.1}px; }}",
-            15.0 * zoom as f64 / 100.0
+        self.zoom_css.load_from_string(&theme::editor_font_css(
+            &settings.config.editor.font,
+            settings.config.appearance.zoom,
         ));
         for doc in self.docs.borrow().iter() {
             doc.buffer.set_style_scheme(applied.scheme.as_ref());

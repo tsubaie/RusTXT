@@ -97,6 +97,42 @@ pub fn present(
     }
     text.add(&zoom_row);
 
+    let font_row = adw::ActionRow::new();
+    font_row.set_title("Font");
+    font_row.set_subtitle(if settings.config.editor.font.is_empty() {
+        "Following the system monospace font. Pick one to pair Latin with an Arabic or other script face."
+    } else {
+        "Edit config.toml to list several families, e.g. \"JetBrainsMono Nerd Font, Noto Naskh Arabic 12\""
+    });
+    let font_button = gtk::FontDialogButton::new(Some(gtk::FontDialog::new()));
+    font_button.set_valign(gtk::Align::Center);
+    font_button.set_use_size(true);
+    if !settings.config.editor.font.is_empty() {
+        font_button.set_font_desc(&gtk::pango::FontDescription::from_string(
+            &settings.config.editor.font,
+        ));
+    }
+    {
+        let change = change.clone();
+        font_button.connect_font_desc_notify(move |button| {
+            if let Some(description) = button.font_desc() {
+                let font = description.to_str().to_string();
+                change(&|config| config.editor.font = font.clone());
+            }
+        });
+    }
+    let font_reset = gtk::Button::with_label("System font");
+    font_reset.set_valign(gtk::Align::Center);
+    font_reset.add_css_class("flat");
+    font_reset.set_sensitive(!settings.config.editor.font.is_empty());
+    {
+        let change = change.clone();
+        font_reset.connect_clicked(move |_| change(&|config| config.editor.font.clear()));
+    }
+    font_row.add_suffix(&font_button);
+    font_row.add_suffix(&font_reset);
+    text.add(&font_row);
+
     let wrap_row = adw::SwitchRow::new();
     wrap_row.set_title("Word wrap");
     wrap_row.set_subtitle("Wrap long lines to the window width");

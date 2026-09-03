@@ -43,6 +43,9 @@
     <td align="center"><img src="docs/screenshots/settings.png" alt="Settings" width="440"><br><sub>Settings: theme, title bar, zoom, word wrap, status bar. That is all of them</sub></td>
     <td align="center"><img src="docs/screenshots/editor-light.png" alt="Light theme" width="440"><br><sub>Light, dark, system, or your Omarchy theme, switched live</sub></td>
   </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/screenshots/rtl-arabic.png" alt="Arabic right-to-left text next to English" width="880"><br><sub>Right-to-left text just works: Arabic and English in the same document, each aligned the right way</sub></td>
+  </tr>
 </table>
 
 ## Features
@@ -52,6 +55,7 @@
 - **Find and replace** with match counting, match case, whole word, and regular expressions. `Ctrl+F`, `Ctrl+H`, `F3`, `Shift+F3`. Go to line with `Ctrl+G`.
 - **Zoom** with `Ctrl` + wheel, `Ctrl+Plus`, `Ctrl+Minus`, `Ctrl+0`. Word wrap and status bar toggles in the *View* menu.
 - **Native printing** through the system print dialog. Time and date stamp with `F5`.
+- **Right-to-left text just works.** Arabic, Hebrew and Persian lines flow and align the way they should. Pair your monospace font with an Arabic face in Settings and both scripts look right side by side.
 - **Line endings preserved.** Opens `CRLF` files and saves them back as `CRLF`. The status bar tells you which.
 - **Open from the terminal.** `rustpad notes.txt todo.md`. A second launch hands its files to the running window.
 - **Follows your desktop.** On [Omarchy](https://omarchy.org) it picks up the active theme's colors automatically and re-themes the moment you run `omarchy theme set`. On tiling compositors the redundant title bar disappears; on GNOME and macOS it stays.
@@ -121,6 +125,7 @@ zoom = 100          # 10-500
 
 [editor]
 word_wrap = true
+font = ""           # empty = system monospace; or e.g. "JetBrainsMono Nerd Font, Noto Naskh Arabic 12"
 
 [window]
 status_bar = true
