@@ -31,7 +31,7 @@ You wanted to write down a phone number. Your editor wanted to update, sync, sig
 
 **Never loses your work.** Every keystroke is saved to disk within half a second. Close the window, kill the process, pull the plug, let the laptop die at 1%. Open RustPad again and every tab, every unsaved line, and even your cursor position are exactly where you left them. It has never once asked "Do you want to save changes?" and it never will.
 
-**Nothing to learn.** Tabs, a menu bar, find and replace, a status bar. The same conventions and shortcuts you already know from every text editor since Notepad. There is no tutorial because there is nothing to tutor.
+**Nothing to learn.** Tabs, a menu bar, find and replace, a status bar. The same conventions and shortcuts you already know from every text editor you have ever used. There is no tutorial because there is nothing to tutor.
 
 **Just works.** Files are saved atomically, permissions are kept, symlinks are respected, and Windows or Unix line endings are preserved exactly as they were. Your text files stay ordinary text files, readable by anything, including your future self with a different editor.
 
@@ -196,7 +196,7 @@ cargo build --release           # optimized binary with LTO
 
 ## Contributing
 
-Issues and pull requests are welcome. Keep the core toolkit-free and covered by tests, and keep the interface boring in the best way: if a feature needs a manual, it probably does not belong in a notepad.
+Issues and pull requests are welcome. Keep the core toolkit-free and covered by tests, and keep the interface boring in the best way: if a feature needs a manual, it probably does not belong in a plain text editor.
 
 ## License
 

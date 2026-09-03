@@ -1,5 +1,5 @@
-//! Find and replace as a small floating tool window over the text, like
-//! Windows 11 Notepad: draggable, with a match counter and an optional
+//! Find and replace as a small floating tool window over the text:
+//! draggable, with a match counter and an optional
 //! replace row. Search itself is GtkSourceView's search context.
 
 use gtk::prelude::*;
@@ -240,7 +240,7 @@ impl FindBar {
     }
 
     pub fn open(&self, replace: bool) {
-        // Seed the field with a single-line selection, as Notepad does.
+        // Seed the field with a single-line selection.
         if let Some(attached) = self.attached.borrow().as_ref() {
             let buffer = attached.view.buffer();
             if let Some((start, end)) = buffer.selection_bounds() {

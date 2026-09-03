@@ -1,4 +1,4 @@
-//! Menu models for the Notepad-style menu bar and the tab context menu.
+//! Menu models for the menu bar and the tab context menu.
 //! Every item targets a `win.*` action defined in `window.rs`.
 
 use gtk::gio;

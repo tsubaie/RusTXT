@@ -6,7 +6,7 @@ members = ["crates/rustpad-core", "crates/rustpad-gtk"]
 version = "0.2.1"
 edition = "2021"
 license = "MIT"
-description = "A fast, recoverable text editor in the spirit of modern Notepad"
+description = "A dead simple, recoverable plain text editor"
 repository = "https://github.com/tsubaie/RustPad"
 
 [profile.release]

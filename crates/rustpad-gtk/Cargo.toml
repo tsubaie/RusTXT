@@ -23,8 +23,7 @@ maintainer = "Talal A. Alsubaie <t.subaie@gmail.com>"
 copyright = "2026, Talal A. Alsubaie"
 license-file = ["../../LICENSE", "0"]
 extended-description = """\
-RustPad is a dead simple, recoverable text editor in the spirit of modern
-Notepad: tabs that remember where you left off, unsaved work that survives a
+RustPad is a dead simple, recoverable plain text editor: tabs that remember where you left off, unsaved work that survives a
 crash, find and replace that stays out of the way. Built with GTK 4,
 libadwaita and GtkSourceView."""
 section = "editors"

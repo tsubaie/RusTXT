@@ -1,4 +1,4 @@
-//! The main window: tab strip, Notepad-style menu bar, editor area with the
+//! The main window: tab strip, classic menu bar, editor area with the
 //! floating find bar, status bar, and all the actions behind the menus.
 //! Persistence, configuration and theming come from `rustpad-core`.
 
@@ -445,7 +445,7 @@ impl RustPadWindow {
         self.tab_view.close_page_finish(page, true);
         self.refresh_closed();
         if self.tab_view.n_pages() == 0 {
-            // Closing the last tab closes RustPad, like Notepad. The snapshot
+            // Closing the last tab closes RustPad. The snapshot
             // stays in the recovery database unless it was discarded.
             self.persist_layout();
             self.window.close();

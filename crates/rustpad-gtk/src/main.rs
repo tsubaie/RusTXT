@@ -1,4 +1,4 @@
-//! RustPad: a fast, recoverable text editor in the spirit of modern Notepad,
+//! RustPad: a dead simple, recoverable plain text editor
 //! built with GTK 4, libadwaita and GtkSourceView on top of `rustpad-core`.
 
 mod document;
