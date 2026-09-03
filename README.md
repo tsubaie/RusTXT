@@ -193,5 +193,3 @@ Issues and pull requests are welcome. Keep the core toolkit-free and covered by 
 ## License
 
 RustPad is released under the [MIT License](LICENSE).
-
-The application icon is a licensed [Icons8](https://icons8.com) asset used with permission. It is not covered by the MIT license and may not be reused outside this project.
