@@ -821,7 +821,7 @@ dependencies = [
 
 [[package]]
 name = "rustpad"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "async-channel",
  "gtk4",
@@ -832,7 +832,7 @@ dependencies = [
 
 [[package]]
 name = "rustpad-core"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "notify",
  "rusqlite",

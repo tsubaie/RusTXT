@@ -1,7 +1,7 @@
 # Builds RustPad from the checked-out repository (used by the release
 # workflow). For the AUR, see ../aur/rustpad-bin/PKGBUILD.
 pkgname=rustpad
-pkgver=0.2.1
+pkgver=0.3.0
 pkgrel=1
 pkgdesc="Dead simple, recoverable text editor built with GTK 4, libadwaita and GtkSourceView"
 arch=('x86_64' 'aarch64')
