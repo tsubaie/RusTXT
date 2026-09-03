@@ -1,50 +1,108 @@
-# RustPad
+<p align="center">
+  <img src="data/icons/com.tsubaie.rustpad.svg" alt="RustPad" width="96" height="96">
+</p>
 
-RustPad is a fast, recoverable text editor in the spirit of modern Windows Notepad, built with GTK 4, libadwaita and GtkSourceView in Rust. It targets Linux and macOS.
+<h1 align="center">RustPad</h1>
 
-The goal is to keep everyday text editing immediate and uncluttered while building a dependable foundation for session recovery, Markdown, large files, and optional writing assistance.
+<p align="center">
+  <strong>Dead simple. No BS. It never loses your text.</strong><br>
+  A notepad for Linux and macOS that opens instantly, remembers everything, and stays out of your way.
+</p>
 
-## Product principles
+<p align="center">
+  <img alt="Rust" src="https://img.shields.io/badge/Rust-2021-orange?logo=rust&logoColor=white">
+  <img alt="GTK 4" src="https://img.shields.io/badge/GTK-4-4a86cf?logo=gtk&logoColor=white">
+  <img alt="libadwaita" src="https://img.shields.io/badge/libadwaita-1.6%2B-7c4dff">
+  <img alt="Platforms" src="https://img.shields.io/badge/Linux%20%7C%20macOS-native-2ea44f">
+</p>
 
-- Open quickly and stay out of the way.
-- Never lose unsaved work.
-- Make tabs and session restoration predictable.
-- Keep saved files as ordinary files that remain usable everywhere.
-- Use native operating-system behavior where it matters.
-- Keep AI and cloud functionality optional.
+<p align="center">
+  <img src="docs/screenshots/editor-dark.png" alt="RustPad editing a note, dark theme" width="880">
+</p>
 
-## Stack
+---
 
-| Layer | Choice |
-|---|---|
-| Toolkit | GTK 4 + libadwaita through `gtk4-rs` and `libadwaita-rs` |
-| Editor widget | GtkSourceView 5 (`sourceview5`) |
-| Core | `rustpad-core`: documents, recovery storage, configuration, themes. No GTK dependency, unit-tested alone |
-| Recovery and session state | SQLite through `rusqlite`, WAL mode |
-| Configuration | TOML in `~/.config/rustpad`, watched with `notify` for live reload |
+## Why RustPad
 
-The filesystem remains authoritative for saved documents. SQLite stores open tabs, unsaved snapshots, cursor and scroll positions, recently closed tabs, and window size.
+**Opens instantly.** A native GTK 4 app, not a browser in a box. Around 3 MB on disk, cold start in a blink.
 
-## What works today
+**Never loses your work.** Every keystroke is snapshotted to a local SQLite database within half a second. Close the window, kill the process, pull the plug. Open RustPad again and every tab, every unsaved line, and even your cursor position are exactly where you left them. No prompts, no "Do you want to save?" nagging.
 
-- Tabs (libadwaita tab bar) with per-tab undo history, a `+` button, a right-click tab menu, and Ctrl+Tab switching.
-- Notepad-style menu bar: **File**, **Edit**, **View**, plus a settings gear. Native popover menus with mnemonics (`Alt+F`, `Alt+E`, `Alt+V`) and shortcut hints.
-- Find and replace in a small floating tool window over the text (`Ctrl+F`, `Ctrl+H`): draggable, with match count, match case, whole word and regular expressions, powered by GtkSourceView's search context. Go to line with `Ctrl+G`.
-- Cut, copy, paste, delete, select all, insert time and date (`F5`), and printing through the native print dialog (`Ctrl+P`).
-- Zoom (`Ctrl` + wheel, `Ctrl+Plus`, `Ctrl+Minus`, `Ctrl+0`), word wrap and status bar toggles.
-- Atomic saves that preserve file permissions and write through symlinks. Line endings are detected on open and preserved on save; the status bar shows `Windows (CRLF)` or `Unix (LF)`.
-- Crash-safe recovery: content snapshots are written 400 ms after edits, only for the document that changed. Clean file-backed tabs are re-read from disk on restart so the file stays authoritative.
-- "Close for now" keeps a tab's recovery snapshot; **File ▸ Recently closed** and `Ctrl+Shift+T` bring it back. "Discard changes and close" deletes the snapshot after confirmation.
-- Opening files from the command line: `rustpad notes.txt other.md`. A second launch hands its files to the running instance.
+**Nothing to learn.** Tabs, a menu bar, find and replace, a status bar. The same conventions and shortcuts you already know from Notepad. That is the whole interface.
+
+**Just works.** Files are saved atomically, permissions are kept, symlinks are respected, and Windows or Unix line endings are preserved exactly as they were. Your text files stay ordinary text files.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/find-replace.png" alt="Find and replace" width="440"><br><sub>Find and replace floats over the text and gets out of the way</sub></td>
+    <td align="center"><img src="docs/screenshots/file-menu.png" alt="File menu" width="440"><br><sub>Real menus with real shortcuts, recently closed tabs included</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/settings.png" alt="Settings" width="440"><br><sub>Settings: theme, title bar, zoom, word wrap, status bar. That is all of them</sub></td>
+    <td align="center"><img src="docs/screenshots/editor-light.png" alt="Light theme" width="440"><br><sub>Light, dark, system, or your Omarchy theme, switched live</sub></td>
+  </tr>
+</table>
+
+## Features
+
+- **Tabs that remember.** Each tab keeps its own undo history, cursor, and scroll position across restarts.
+- **Close for now, or discard for good.** Closing a tab keeps its recovery copy. *File ▸ Recently closed* or `Ctrl+Shift+T` brings it back. *Discard changes and close* is the only way to lose text, and it asks first.
+- **Find and replace** with match counting, match case, whole word, and regular expressions. `Ctrl+F`, `Ctrl+H`, `F3`, `Shift+F3`. Go to line with `Ctrl+G`.
+- **Zoom** with `Ctrl` + wheel, `Ctrl+Plus`, `Ctrl+Minus`, `Ctrl+0`. Word wrap and status bar toggles in the *View* menu.
+- **Native printing** through the system print dialog. Time and date stamp with `F5`.
+- **Line endings preserved.** Opens `CRLF` files and saves them back as `CRLF`. The status bar tells you which.
+- **Open from the terminal.** `rustpad notes.txt todo.md`. A second launch hands its files to the running window.
+- **Follows your desktop.** On [Omarchy](https://omarchy.org) it picks up the active theme's colors automatically and re-themes the moment you run `omarchy theme set`. On tiling compositors the redundant title bar disappears; on GNOME and macOS it stays.
+
+## Install
+
+**Arch Linux / Omarchy**
+
+```bash
+omarchy pkg add gtk4 libadwaita gtksourceview5      # or: sudo pacman -S gtk4 libadwaita gtksourceview5
+cargo install --path crates/rustpad-gtk
+```
+
+**Debian / Ubuntu**
+
+```bash
+sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev
+cargo install --path crates/rustpad-gtk
+```
+
+**Fedora**
+
+```bash
+sudo dnf install gtk4-devel libadwaita-devel gtksourceview5-devel
+cargo install --path crates/rustpad-gtk
+```
+
+**macOS**
+
+```bash
+brew install gtk4 libadwaita gtksourceview5
+cargo install --path crates/rustpad-gtk
+```
+
+Then add the launcher entry and icon (Linux):
+
+```bash
+install -Dm644 data/com.tsubaie.rustpad.desktop ~/.local/share/applications/com.tsubaie.rustpad.desktop
+install -Dm644 data/icons/com.tsubaie.rustpad.svg ~/.local/share/icons/hicolor/scalable/apps/com.tsubaie.rustpad.svg
+```
+
+Or just run it from the source tree with `cargo run -p rustpad`.
 
 ## Configuration
 
-All settings live in `~/.config/rustpad/config.toml` (`$XDG_CONFIG_HOME/rustpad/config.toml`, the same path on macOS). RustPad writes a commented default on first launch, and every change made in Settings or the View menu is saved back to that file. Edits made by hand apply immediately while RustPad is running.
+There is one file, and you will rarely need it: `~/.config/rustpad/config.toml`. RustPad writes it with comments on first launch, keeps it in sync with the Settings dialog, and picks up hand edits immediately.
 
 ```toml
 [appearance]
-theme = "auto"   # "auto", "system", "light", "dark", "omarchy", or a custom theme name
-zoom = 100       # 10-500
+theme = "auto"      # "auto", "system", "light", "dark", "omarchy", or a custom theme name
+zoom = 100          # 10-500
 
 [editor]
 word_wrap = true
@@ -56,82 +114,63 @@ title_bar = "auto"  # "auto", "show", "hide"
 
 ### Themes
 
-- `auto` follows the active [Omarchy](https://omarchy.org) theme when one is installed, and the system light/dark preference otherwise.
-- `system`, `light`, and `dark` are the stock libadwaita looks with GtkSourceView's Adwaita schemes.
-- `omarchy` reads the active theme's `colors.toml` from `~/.local/state/omarchy/current/theme/` and re-applies whenever `omarchy theme set` runs. A theme may also ship its own `rustpad.toml` in that directory to override the derived mapping.
-- Any other name loads `~/.config/rustpad/themes/<name>.toml`:
+`auto` follows your Omarchy theme when one is installed and the system light/dark setting otherwise. To make your own, drop a file in `~/.config/rustpad/themes/` and set `theme` to its name:
 
 ```toml
+# ~/.config/rustpad/themes/solarized.toml
 mode = "dark"            # "dark" or "light"
-background = "#1e1e2e"   # editor background
-foreground = "#cdd6f4"
-accent = "#89b4fa"       # optional; the rest are optional too
-muted = "#6c7086"
-selection = "#45475a"
-border = "#313244"
-chrome = "#161622"       # tab strip and window background
-menu = "#313244"         # menus, popovers, cards
+background = "#002b36"
+foreground = "#839496"
+accent = "#b58900"       # optional, as are the rest
+muted = "#586e75"
+selection = "#073642"
+border = "#073642"
+chrome = "#00212b"       # tab strip and window
+menu = "#073642"         # menus and popovers
 ```
 
-Palettes are applied as libadwaita CSS variables and as a generated GtkSourceView style scheme, so the whole window follows the colors.
+Palettes drive both the libadwaita widgets and the editor's color scheme, so the whole window follows.
 
-### Window title bar
+## Keyboard shortcuts
 
-libadwaita draws a client-side header bar. Tiling compositors such as Hyprland, Sway, river and niri never draw a title bar of their own, so `title_bar = "auto"` hides the header bar there and keeps it on GNOME, KDE and macOS. The tab strip doubles as a drag handle when the bar is hidden.
+| Action | Shortcut | Action | Shortcut |
+|---|---|---|---|
+| New tab | `Ctrl+N` | Find | `Ctrl+F` |
+| Open | `Ctrl+O` | Replace | `Ctrl+H` |
+| Save / Save as | `Ctrl+S` / `Ctrl+Shift+S` | Find next / previous | `F3` / `Shift+F3` |
+| Save all | `Ctrl+Alt+S` | Go to line | `Ctrl+G` |
+| Close tab | `Ctrl+W` | Time and date | `F5` |
+| Reopen closed tab | `Ctrl+Shift+T` | Zoom in / out / reset | `Ctrl++` / `Ctrl+-` / `Ctrl+0` |
+| Next / previous tab | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Settings | `Ctrl+,` |
+| Print | `Ctrl+P` | Exit | `Ctrl+Shift+W` |
 
-## Session behavior
+Menus open with `Alt+F`, `Alt+E`, `Alt+V`, or `F10`.
 
-- **Close for now:** hide the tab while retaining its recovery state; reopen it from **File ▸ Recently closed**.
-- **Discard changes:** explicitly and permanently remove the unsaved recovery snapshot.
-- **Save:** atomically write the document to disk and update its recovery state.
-- **Exit:** preserve all open tabs without forcing save prompts.
+## How it is built
 
-## Building
+```
+crates/rustpad-core   documents, recovery storage, config, themes. No GTK. Unit tested on its own.
+crates/rustpad-gtk    the application: window, tabs, find bar, menus, settings, printing.
+data/                 desktop entry and icon.
+```
 
-Linux (Arch / Omarchy):
+- **GTK 4 + libadwaita** through `gtk4-rs`, **GtkSourceView 5** for the editor.
+- **SQLite** (WAL mode) for tabs, unsaved snapshots, cursor and scroll positions, and recently closed tabs. Only the tab you are typing in is written, and only after you pause.
+- **TOML** configuration watched with `notify` so edits and theme changes apply live.
+- Saves go through a temporary file and an atomic rename, keep the original permissions, and write through symlinks.
 
 ```bash
-omarchy pkg add gtk4 libadwaita gtksourceview5   # or: sudo pacman -S gtk4 libadwaita gtksourceview5
-cargo run -p rustpad
+cargo test -p rustpad-core      # core unit tests
+cargo build --release           # optimized binary with LTO
 ```
-
-Debian/Ubuntu need `libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev`; Fedora needs `gtk4-devel libadwaita-devel gtksourceview5-devel`.
-
-macOS:
-
-```bash
-brew install gtk4 libadwaita gtksourceview5
-cargo run -p rustpad
-```
-
-Install for the current user:
-
-```bash
-cargo install --path crates/rustpad-gtk
-install -Dm644 data/com.tsubaie.rustpad.desktop ~/.local/share/applications/com.tsubaie.rustpad.desktop
-install -Dm644 data/icons/com.tsubaie.rustpad.svg ~/.local/share/icons/hicolor/scalable/apps/com.tsubaie.rustpad.svg
-```
-
-Validation:
-
-```bash
-cargo test -p rustpad-core
-cargo build --release
-```
-
-## Layout
-
-```
-crates/rustpad-core   toolkit-free core: storage, files, config, desktop, watch
-crates/rustpad-gtk    the application: window, document, find bar, menus, settings, theme, printing
-data/                 desktop entry and icon
-```
-
-The GTK crate never reaches into SQLite or TOML directly; it calls the core and stays a thin presentation layer.
 
 ## Roadmap
 
-- **V2:** encoding and line-ending controls, external-file change detection, recent files, font settings.
-- **V3:** Markdown formatting and preview, spellcheck, export.
-- **V4:** large-file mode, command palette, advanced navigation, a carefully permissioned extension model.
-- **V5:** optional, provider-neutral writing tools backed by local models or user-configured cloud providers.
+- Encoding and line-ending controls, external-change detection, recent files, font settings.
+- Markdown preview, spellcheck, export.
+- Large-file mode, command palette, a carefully permissioned extension model.
+- Optional, provider-neutral writing tools that run locally or with a provider you configure.
+
+## Contributing
+
+Issues and pull requests are welcome. Keep the core toolkit-free and covered by tests, and keep the interface boring in the best way: if a feature needs a manual, it probably does not belong in a notepad.

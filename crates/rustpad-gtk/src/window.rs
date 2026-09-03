@@ -161,16 +161,9 @@ impl RustPadWindow {
 
         let menus = menus::build();
         let menubar = gtk::PopoverMenuBar::from_model(Some(&menus.bar));
-        let gear = gtk::Button::from_icon_name("emblem-system-symbolic");
-        gear.add_css_class("flat");
-        gear.set_tooltip_text(Some("Settings (Ctrl+,)"));
-        gear.set_action_name(Some("win.settings"));
-        gear.set_halign(gtk::Align::End);
-        gear.set_hexpand(true);
         let menu_row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         menu_row.add_css_class("rustpad-menubar");
         menu_row.append(&menubar);
-        menu_row.append(&gear);
 
         let search_settings = sourceview5::SearchSettings::new();
         let find_bar = FindBar::new(search_settings);

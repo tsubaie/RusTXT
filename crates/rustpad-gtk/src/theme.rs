@@ -22,6 +22,12 @@ const BASE_CSS: &str = r#"
 .find-card button.option { font-weight: bold; font-size: 0.85em; }
 "#;
 
+/// The application logo, embedded so About works without an installed icon theme.
+pub fn logo_texture() -> gtk::gdk::Texture {
+    static LOGO: &[u8] = include_bytes!("../../../data/icons/rustpad-256.png");
+    gtk::gdk::Texture::from_bytes(&gtk::glib::Bytes::from_static(LOGO)).expect("embedded logo is a valid PNG")
+}
+
 /// Add the static application stylesheet once.
 pub fn install_base_css() {
     let provider = gtk::CssProvider::new();
