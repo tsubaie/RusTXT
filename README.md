@@ -6,7 +6,8 @@
 
 <p align="center">
   <strong>Dead simple. No BS. It never loses your text.</strong><br>
-  A plain text editor for Linux and macOS that opens instantly, remembers everything, and stays out of your way.
+  A plain text editor for Linux and macOS that opens instantly, remembers everything, and stays out of your way.<br>
+  <sub>No plugins. No AI sidebar. No account. No "What's new" popup. Just a place to type.</sub>
 </p>
 
 <p align="center">
@@ -24,13 +25,15 @@
 
 ## Why RustPad
 
-**Opens instantly.** A real native app, not a browser in a box. Around 3 MB on disk, and it is on screen before you finish reaching for the keyboard.
+You wanted to write down a phone number. Your editor wanted to update, sync, sign you in, and recommend an extension. RustPad just opened.
 
-**Never loses your work.** Every keystroke is saved to disk within half a second. Close the window, kill the process, pull the plug. Open RustPad again and every tab, every unsaved line, and even your cursor position are exactly where you left them. No prompts, no "Do you want to save?" nagging.
+**Opens instantly.** A real native app, not a browser in a box. Around 3 MB on disk, and it is on screen before you finish reaching for the keyboard. Your thought is still fresh when the cursor starts blinking.
 
-**Nothing to learn.** Tabs, a menu bar, find and replace, a status bar. The same conventions and shortcuts you already know from every text editor since Notepad. That is the whole interface.
+**Never loses your work.** Every keystroke is saved to disk within half a second. Close the window, kill the process, pull the plug, let the laptop die at 1%. Open RustPad again and every tab, every unsaved line, and even your cursor position are exactly where you left them. It has never once asked "Do you want to save changes?" and it never will.
 
-**Just works.** Files are saved atomically, permissions are kept, symlinks are respected, and Windows or Unix line endings are preserved exactly as they were. Your text files stay ordinary text files.
+**Nothing to learn.** Tabs, a menu bar, find and replace, a status bar. The same conventions and shortcuts you already know from every text editor since Notepad. There is no tutorial because there is nothing to tutor.
+
+**Just works.** Files are saved atomically, permissions are kept, symlinks are respected, and Windows or Unix line endings are preserved exactly as they were. Your text files stay ordinary text files, readable by anything, including your future self with a different editor.
 
 ## Screenshots
 
