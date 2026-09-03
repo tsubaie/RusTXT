@@ -1,0 +1,29 @@
+# Builds RustPad from the checked-out repository (used by the release
+# workflow). For the AUR, see ../aur/rustpad-bin/PKGBUILD.
+pkgname=rustpad
+pkgver=0.2.0
+pkgrel=1
+pkgdesc="Dead simple, recoverable text editor built with GTK 4, libadwaita and GtkSourceView"
+arch=('x86_64' 'aarch64')
+url="https://github.com/tsubaie/RustPad"
+license=('MIT')
+depends=('gtk4' 'libadwaita' 'gtksourceview5')
+makedepends=('cargo')
+options=('!lto' '!strip')
+source=()
+
+_repo="$startdir/../.."
+
+build() {
+  cd "$_repo"
+  cargo build --release --locked -p rustpad
+}
+
+package() {
+  cd "$_repo"
+  install -Dm755 target/release/rustpad "$pkgdir/usr/bin/rustpad"
+  install -Dm644 data/com.tsubaie.rustpad.desktop "$pkgdir/usr/share/applications/com.tsubaie.rustpad.desktop"
+  install -Dm644 data/icons/com.tsubaie.rustpad.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/com.tsubaie.rustpad.svg"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}

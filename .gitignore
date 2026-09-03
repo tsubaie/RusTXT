@@ -2,3 +2,6 @@
 *.db
 *.db-shm
 *.db-wal
+*.pkg.tar.zst
+/packaging/arch/pkg
+/packaging/arch/src

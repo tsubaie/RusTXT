@@ -58,6 +58,21 @@
 
 ## Install
 
+### Download a package
+
+Grab the latest build from the [Releases page](https://github.com/tsubaie/RustPad/releases/latest):
+
+| Distro | File | Install |
+|---|---|---|
+| Arch Linux / Omarchy | `rustpad-*.pkg.tar.zst` | `sudo pacman -U rustpad-*.pkg.tar.zst` |
+| Debian 13+ / Ubuntu 25.04+ | `rustpad_*_amd64.deb` | `sudo apt install ./rustpad_*_amd64.deb` |
+| Fedora 42+ | `rustpad-*.x86_64.rpm` | `sudo dnf install ./rustpad-*.x86_64.rpm` |
+| Any Linux | `rustpad-*-x86_64-linux.tar.gz` | extract, then `./install.sh` |
+
+RustPad needs GTK 4.16, libadwaita 1.6 and GtkSourceView 5 or newer, which rules out Debian 12 and Ubuntu 24.04. Every release ships a `SHA256SUMS` file.
+
+### Build from source
+
 **Arch Linux / Omarchy**
 
 ```bash

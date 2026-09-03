@@ -1,0 +1,119 @@
+name: Release
+
+# Push a tag like v0.2.0 to build native packages and publish a GitHub Release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  arch:
+    name: Arch package and tarball
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Install toolchain and GTK
+        run: pacman -Syu --noconfirm rust gtk4 libadwaita gtksourceview5 git sudo
+      - uses: actions/checkout@v4
+      - name: Version from tag
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+      - name: Build Arch package
+        run: |
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+          chown -R builder .
+          sed -i "s/^pkgver=.*/pkgver=$VERSION/" packaging/arch/PKGBUILD
+          cd packaging/arch
+          sudo -u builder makepkg -f --noconfirm
+      - name: Build tarball
+        run: |
+          set -eu
+          dir="rustpad-$VERSION"
+          mkdir -p "dist/$dir"
+          cp target/release/rustpad data/com.tsubaie.rustpad.desktop data/icons/com.tsubaie.rustpad.svg LICENSE README.md packaging/tarball/install.sh "dist/$dir/"
+          tar -C dist -czf "dist/rustpad-$VERSION-x86_64-linux.tar.gz" "$dir"
+          rm -r "dist/$dir"
+          mv packaging/arch/*.pkg.tar.zst dist/
+          sha=$(sha256sum "dist/rustpad-$VERSION-x86_64-linux.tar.gz" | cut -d' ' -f1)
+          sed -e "s/@VERSION@/$VERSION/" -e "s/@SHA256@/$sha/" packaging/aur/rustpad-bin/PKGBUILD > dist/PKGBUILD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch
+          path: dist/*
+
+  deb:
+    name: Debian package
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential curl ca-certificates pkg-config dpkg-dev git \
+            libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v4
+      - name: Install cargo-deb
+        run: cargo install cargo-deb --locked
+      - name: Build .deb
+        run: |
+          cargo deb -p rustpad --locked
+          mkdir -p dist && cp target/debian/*.deb dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb
+          path: dist/*
+
+  rpm:
+    name: Fedora package
+    runs-on: ubuntu-latest
+    container: fedora:42
+    steps:
+      - name: Install build dependencies
+        run: dnf install -y gcc pkgconf-pkg-config curl git rpm-build gtk4-devel libadwaita-devel gtksourceview5-devel
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v4
+      - name: Install cargo-generate-rpm
+        run: cargo install cargo-generate-rpm --locked
+      - name: Build .rpm
+        run: |
+          cargo build --release --locked -p rustpad
+          cargo generate-rpm -p crates/rustpad-gtk
+          mkdir -p dist && cp target/generate-rpm/*.rpm dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm
+          path: dist/*
+
+  release:
+    name: Publish GitHub Release
+    needs: [arch, deb, rpm]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum * > SHA256SUMS && ls -la
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          body: |
+            ## Install
+
+            | Distro | Command |
+            |---|---|
+            | Arch / Omarchy | `sudo pacman -U rustpad-*.pkg.tar.zst` |
+            | Debian 13+ / Ubuntu 25.04+ | `sudo apt install ./rustpad_*_amd64.deb` |
+            | Fedora 42+ | `sudo dnf install ./rustpad-*.x86_64.rpm` |
+            | Any Linux | extract the `.tar.gz` and run `./install.sh` |
+
+            RustPad needs GTK 4.16, libadwaita 1.6 and GtkSourceView 5 or newer.
+            Verify downloads against `SHA256SUMS`.
