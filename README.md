@@ -174,3 +174,9 @@ cargo build --release           # optimized binary with LTO
 ## Contributing
 
 Issues and pull requests are welcome. Keep the core toolkit-free and covered by tests, and keep the interface boring in the best way: if a feature needs a manual, it probably does not belong in a notepad.
+
+## License
+
+RustPad is released under the [MIT License](LICENSE).
+
+The application icon is a licensed [Icons8](https://icons8.com) asset used with permission. It is not covered by the MIT license and may not be reused outside this project.

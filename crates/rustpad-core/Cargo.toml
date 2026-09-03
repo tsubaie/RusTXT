@@ -2,6 +2,7 @@
 name = "rustpad-core"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 description = "Toolkit-independent core of RustPad: documents, recovery storage, configuration, themes"
 
 [dependencies]
