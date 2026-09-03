@@ -161,10 +161,30 @@ pub fn present(
     // About -------------------------------------------------------------------
     let about = adw::PreferencesGroup::new();
     about.set_title("About");
-    let version = adw::ActionRow::new();
-    version.set_title(&format!("RustPad {}", crate::VERSION));
-    version.set_subtitle("A fast, recoverable text editor. GTK 4, libadwaita and GtkSourceView.");
-    about.add(&version);
+    let brand = gtk::Box::new(gtk::Orientation::Horizontal, 16);
+    brand.add_css_class("card");
+    brand.set_margin_top(4);
+    let logo = gtk::Image::from_paintable(Some(&crate::theme::logo_texture()));
+    logo.set_pixel_size(72);
+    logo.set_margin_top(14);
+    logo.set_margin_bottom(14);
+    logo.set_margin_start(16);
+    let words = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    words.set_valign(gtk::Align::Center);
+    let name = gtk::Label::new(Some(&format!("RustPad {}", crate::VERSION)));
+    name.add_css_class("title-3");
+    name.set_xalign(0.0);
+    let blurb = gtk::Label::new(Some(
+        "Dead simple, recoverable text editing. GTK 4, libadwaita and GtkSourceView in Rust.",
+    ));
+    blurb.add_css_class("dim-label");
+    blurb.set_xalign(0.0);
+    blurb.set_wrap(true);
+    words.append(&name);
+    words.append(&blurb);
+    brand.append(&logo);
+    brand.append(&words);
+    about.add(&brand);
     page.add(&about);
 
     let dialog = adw::PreferencesDialog::new();
