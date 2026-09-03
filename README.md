@@ -51,7 +51,7 @@
 ## Features
 
 - **Tabs that remember.** Each tab keeps its own undo history, cursor, and scroll position across restarts.
-- **Close for now, or discard for good.** Closing a tab keeps its recovery copy. *File ▸ Recently closed* or `Ctrl+Shift+T` brings it back. *Discard changes and close* is the only way to lose text, and it asks first.
+- **Close for now, or discard for good.** Closing a tab keeps its recovery copy, and closing the last tab closes RustPad. *File ▸ Recently closed* or `Ctrl+Shift+T` brings it back. *Discard changes and close* is the only way to lose text, and it asks first.
 - **Find and replace** with match counting, match case, whole word, and regular expressions. `Ctrl+F`, `Ctrl+H`, `F3`, `Shift+F3`. Go to line with `Ctrl+G`.
 - **Zoom** with `Ctrl` + wheel, `Ctrl+Plus`, `Ctrl+Minus`, `Ctrl+0`. Word wrap and status bar toggles in the *View* menu.
 - **Native printing** through the system print dialog. Time and date stamp with `F5`.
@@ -155,7 +155,7 @@ Palettes drive both the libadwaita widgets and the editor's color scheme, so the
 
 | Action | Shortcut | Action | Shortcut |
 |---|---|---|---|
-| New tab | `Ctrl+N` | Find | `Ctrl+F` |
+| New tab | `Ctrl+N` or `Ctrl+T` | Find | `Ctrl+F` |
 | Open | `Ctrl+O` | Replace | `Ctrl+H` |
 | Save / Save as | `Ctrl+S` / `Ctrl+Shift+S` | Find next / previous | `F3` / `Shift+F3` |
 | Save all | `Ctrl+Alt+S` | Go to line | `Ctrl+G` |

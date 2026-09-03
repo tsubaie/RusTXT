@@ -257,10 +257,11 @@ impl RustPadWindow {
             }
             Err(error) => self.show_error(&error),
         }
+        self.restoring.set(false);
         if self.tab_view.n_pages() == 0 {
+            // Nothing to restore: start with one empty tab, recorded right away.
             self.new_document();
         }
-        self.restoring.set(false);
         self.persist_layout();
         self.on_active_changed();
     }
@@ -442,11 +443,15 @@ impl RustPadWindow {
         }
         self.docs.borrow_mut().retain(|doc| doc.page != *page);
         self.tab_view.close_page_finish(page, true);
+        self.refresh_closed();
         if self.tab_view.n_pages() == 0 {
-            self.new_document();
+            // Closing the last tab closes RustPad, like Notepad. The snapshot
+            // stays in the recovery database unless it was discarded.
+            self.persist_layout();
+            self.window.close();
+            return;
         }
         self.persist_layout();
-        self.refresh_closed();
         self.on_active_changed();
     }
 
@@ -455,6 +460,17 @@ impl RustPadWindow {
         match reopened {
             Ok(Some(mut state)) => {
                 files::refresh_from_disk(std::slice::from_mut(&mut state));
+                if state.file_path.is_none()
+                    && self.docs.borrow().iter().any(|d| d.title() == state.title)
+                {
+                    let titles: Vec<String> =
+                        self.docs.borrow().iter().map(|d| d.title()).collect();
+                    state.title = DocumentState::untitled(
+                        titles.iter().map(String::as_str),
+                        state.line_ending,
+                    )
+                    .title;
+                }
                 let existing = state.file_path.as_deref().and_then(|path| {
                     self.docs
                         .borrow()
