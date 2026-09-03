@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=RustPad
+GenericName=Text Editor
+Comment=A fast, recoverable text editor
+Exec=rustpad %F
+Icon=com.tsubaie.rustpad
+Terminal=false
+Type=Application
+Categories=Utility;TextEditor;GTK;
+MimeType=text/plain;
+StartupNotify=true
+StartupWMClass=com.tsubaie.rustpad
+Keywords=notepad;text;editor;

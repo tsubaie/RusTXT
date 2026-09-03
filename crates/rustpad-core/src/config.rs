@@ -6,7 +6,7 @@
 //! `~/.config/rustpad/themes/`. On Omarchy the active theme's `colors.toml`
 //! is read directly, so RustPad follows the desktop theme with no setup.
 
-use crate::desktop::TitlebarMode;
+use crate::desktop::{self, TitlebarMode};
 use crate::files;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -95,11 +95,41 @@ impl Config {
 pub struct Paths {
     /// `~/.config/rustpad`
     pub config_dir: PathBuf,
+    /// `~/.local/share/rustpad`
+    pub data_dir: PathBuf,
+    /// `~/.cache/rustpad`
+    pub cache_dir: PathBuf,
     /// `~/.local/state/omarchy/current/theme`
     pub omarchy_theme_dir: PathBuf,
 }
 
 impl Paths {
+    /// Standard XDG locations: `~/.config/rustpad` and the Omarchy theme state.
+    /// The same layout is used on macOS so the config is where users expect a
+    /// dotfile-style editor to keep it.
+    pub fn discover() -> Self {
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("."));
+        let xdg = |var: &str, fallback: &str| {
+            std::env::var_os(var)
+                .map(PathBuf::from)
+                .filter(|p| p.is_absolute())
+                .unwrap_or_else(|| home.join(fallback))
+        };
+        Self {
+            config_dir: xdg("XDG_CONFIG_HOME", ".config").join("rustpad"),
+            data_dir: xdg("XDG_DATA_HOME", ".local/share").join("rustpad"),
+            cache_dir: xdg("XDG_CACHE_HOME", ".cache").join("rustpad"),
+            omarchy_theme_dir: xdg("XDG_STATE_HOME", ".local/state").join("omarchy/current/theme"),
+        }
+    }
+
+    /// Recovery database location.
+    pub fn session_db(&self) -> PathBuf {
+        self.data_dir.join("session.db")
+    }
+
     pub fn config_file(&self) -> PathBuf {
         self.config_dir.join("config.toml")
     }
@@ -170,6 +200,47 @@ pub fn save(paths: &Paths, config: &Config) -> Result<(), String> {
         &paths.config_file(),
         format!("{CONFIG_HEADER}{body}").as_bytes(),
     )
+}
+
+/// Everything the interface needs to apply the user's configuration.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Settings {
+    pub config: Config,
+    pub theme: ResolvedTheme,
+    pub custom_themes: Vec<String>,
+    pub config_path: String,
+    pub omarchy_available: bool,
+    pub tiling_compositor: bool,
+    /// Whether the window should show native decorations.
+    pub decorated: bool,
+    /// Set when config.toml exists but could not be parsed.
+    pub config_error: Option<String>,
+}
+
+pub fn settings(paths: &Paths) -> Settings {
+    let loaded = load(paths);
+    let tiling_compositor = desktop::running_on_tiling_compositor();
+    Settings {
+        theme: resolve_theme(&loaded.config.appearance.theme, paths),
+        custom_themes: list_custom_themes(paths),
+        config_path: paths.config_file().display().to_string(),
+        omarchy_available: paths.omarchy_available(),
+        tiling_compositor,
+        decorated: loaded.config.window.title_bar.decorated(tiling_compositor),
+        config_error: loaded.error,
+        config: loaded.config,
+    }
+}
+
+/// Create a commented default config.toml if none exists yet, so the file is
+/// easy to discover. Errors are returned for logging; startup continues.
+pub fn ensure_config_file(paths: &Paths) -> Result<bool, String> {
+    if paths.config_file().exists() {
+        return Ok(false);
+    }
+    save(paths, &Config::default())?;
+    Ok(true)
 }
 
 // ---------------------------------------------------------------------------
@@ -360,6 +431,8 @@ blue = "#89b4fa"
     fn paths(root: &Path) -> Paths {
         Paths {
             config_dir: root.join("config/rustpad"),
+            data_dir: root.join("data/rustpad"),
+            cache_dir: root.join("cache/rustpad"),
             omarchy_theme_dir: root.join("state/omarchy/current/theme"),
         }
     }

@@ -1,0 +1,16 @@
+[package]
+name = "rustpad"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+
+[[bin]]
+name = "rustpad"
+path = "src/main.rs"
+
+[dependencies]
+rustpad-core = { path = "../rustpad-core" }
+gtk = { package = "gtk4", version = "0.11", features = ["v4_16"] }
+adw = { package = "libadwaita", version = "0.9", features = ["v1_6"] }
+sourceview5 = "0.11"
+async-channel = "2"

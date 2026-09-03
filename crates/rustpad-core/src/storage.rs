@@ -64,6 +64,31 @@ pub struct DocumentState {
     pub line_ending: LineEnding,
 }
 
+impl DocumentState {
+    /// A new empty document titled "Untitled N", using the smallest N that is
+    /// not already taken by one of `existing_titles`.
+    pub fn untitled<'a>(
+        existing_titles: impl Iterator<Item = &'a str>,
+        line_ending: LineEnding,
+    ) -> Self {
+        let used: std::collections::HashSet<u32> = existing_titles
+            .filter_map(|title| title.strip_prefix("Untitled ")?.parse().ok())
+            .collect();
+        let number = (1..).find(|n| !used.contains(n)).unwrap_or(1);
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            file_path: None,
+            title: format!("Untitled {number}"),
+            content: String::new(),
+            dirty: false,
+            cursor_offset: 0,
+            scroll_top: 0.0,
+            tab_position: 0,
+            line_ending,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ClosedDocument {
@@ -378,6 +403,17 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let storage = Storage::open(&dir.path().join("state.db")).unwrap();
         (dir, storage)
+    }
+
+    #[test]
+    fn untitled_picks_the_smallest_free_number() {
+        let titles = ["Untitled 1", "notes.txt", "Untitled 3"];
+        let doc = DocumentState::untitled(titles.iter().copied(), LineEnding::Lf);
+        assert_eq!(doc.title, "Untitled 2");
+        assert_eq!(
+            DocumentState::untitled(std::iter::empty(), LineEnding::Lf).title,
+            "Untitled 1"
+        );
     }
 
     #[test]

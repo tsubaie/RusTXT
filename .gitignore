@@ -1,7 +1,4 @@
-/node_modules
-/dist
-/src-tauri/target
-/src-tauri/gen
+/target
 *.db
 *.db-shm
 *.db-wal
