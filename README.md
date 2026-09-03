@@ -24,7 +24,7 @@
 
 ## Why RustPad
 
-**Opens instantly.** A native GTK 4 app, not a browser in a box. Around 3 MB on disk, cold start in a blink.
+**Opens instantly.** A real native app, not a browser in a box. Around 3 MB on disk, and it is on screen before you finish reaching for the keyboard.
 
 **Never loses your work.** Every keystroke is snapshotted to a local SQLite database within half a second. Close the window, kill the process, pull the plug. Open RustPad again and every tab, every unsaved line, and even your cursor position are exactly where you left them. No prompts, no "Do you want to save?" nagging.
 
