@@ -13,5 +13,5 @@
     "windows": [{ "title": "RustPad", "width": 1000, "height": 700, "minWidth": 560, "minHeight": 360 }],
     "security": { "csp": null }
   },
-  "bundle": { "active": true, "targets": "all", "icon": [] }
+  "bundle": { "active": true, "targets": "all", "icon": ["icons/icon.png"] }
 }
