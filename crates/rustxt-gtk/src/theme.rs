@@ -1,20 +1,20 @@
 //! Turns a resolved theme into libadwaita CSS variables and a GtkSourceView
 //! style scheme, so Omarchy and custom palettes color the whole window.
 
-use rustpad_core::config::{Palette, ResolvedTheme};
+use rustxt_core::config::{Palette, ResolvedTheme};
 use std::{cell::Cell, fs, path::Path};
 
 const BASE_CSS: &str = r#"
-.rustpad-menubar { padding: 0 4px; }
-.rustpad-menubar menubar { background: transparent; }
-.rustpad-menubar > menubar > item { padding: 6px 10px; border-radius: 6px; }
-.rustpad-status {
+.rustxt-menubar { padding: 0 4px; }
+.rustxt-menubar menubar { background: transparent; }
+.rustxt-menubar > menubar > item { padding: 6px 10px; border-radius: 6px; }
+.rustxt-status {
   padding: 3px 12px;
   font-size: 0.85em;
   border-top: 1px solid alpha(currentColor, 0.12);
 }
-.rustpad-status label { opacity: 0.75; }
-.rustpad-status separator { margin: 3px 10px; opacity: 0.5; }
+.rustxt-status label { opacity: 0.75; }
+.rustxt-status separator { margin: 3px 10px; opacity: 0.5; }
 .find-card { padding: 6px; }
 .find-card entry { min-width: 170px; }
 .find-count { font-size: 0.85em; opacity: 0.75; margin: 0 4px; }
@@ -24,7 +24,7 @@ const BASE_CSS: &str = r#"
 
 /// The application logo, embedded so About works without an installed icon theme.
 pub fn logo_texture() -> gtk::gdk::Texture {
-    static LOGO: &[u8] = include_bytes!("../../../data/icons/rustpad-256.png");
+    static LOGO: &[u8] = include_bytes!("../../../data/icons/com.tsubaie.rustxt.png");
     gtk::gdk::Texture::from_bytes(&gtk::glib::Bytes::from_static(LOGO))
         .expect("embedded logo is a valid PNG")
 }
@@ -43,7 +43,7 @@ pub fn editor_font_css(font: &str, zoom: u32) -> String {
     let font = font.trim();
     if font.is_empty() {
         return format!(
-            "textview.rustpad-editor {{ font-family: monospace, \"{ARABIC_FONT}\"; font-size: {:.1}px; }}",
+            "textview.rustxt-editor {{ font-family: monospace, \"{ARABIC_FONT}\"; font-size: {:.1}px; }}",
             15.0 * scale
         );
     }
@@ -98,7 +98,7 @@ pub fn editor_font_css(font: &str, zoom: u32) -> String {
     if weight != 400 {
         rules.push(format!("font-weight: {weight};"));
     }
-    format!("textview.rustpad-editor {{ {} }}", rules.join(" "))
+    format!("textview.rustxt-editor {{ {} }}", rules.join(" "))
 }
 
 /// Add the static application stylesheet once.
@@ -198,7 +198,7 @@ fn palette_css(palette: &Palette, dark: bool) -> String {
   --sidebar-bg-color: {chrome}; --sidebar-fg-color: {fg};
   --accent-bg-color: {accent}; --accent-fg-color: {accent_fg}; --accent-color: {accent};
 }}
-.rustpad-status {{ background-color: {chrome}; }}"
+.rustxt-status {{ background-color: {chrome}; }}"
     )
 }
 
@@ -234,7 +234,7 @@ fn palette_scheme(
         .unwrap_or_else(|| accent.clone());
     let xml = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
-<style-scheme id="rustpad" name="RustPad" version="1.0">
+<style-scheme id="rustxt" name="RusTXT" version="1.0">
   <style name="text" foreground="{fg}" background="{bg}"/>
   <style name="selection" background="{selection}"/>
   <style name="selection-unfocused" background="{selection}"/>
@@ -248,9 +248,9 @@ fn palette_scheme(
 
     let dir = cache_dir.join("styles");
     if let Err(error) =
-        fs::create_dir_all(&dir).and_then(|_| fs::write(dir.join("rustpad.xml"), xml))
+        fs::create_dir_all(&dir).and_then(|_| fs::write(dir.join("rustxt.xml"), xml))
     {
-        eprintln!("RustPad: could not write style scheme: {error}");
+        eprintln!("RusTXT: could not write style scheme: {error}");
         return builtin_scheme(dark);
     }
     let manager = sourceview5::StyleSchemeManager::default();
@@ -258,7 +258,7 @@ fn palette_scheme(
         manager.append_search_path(&dir.to_string_lossy());
     }
     manager.force_rescan();
-    manager.scheme("rustpad").or_else(|| builtin_scheme(dark))
+    manager.scheme("rustxt").or_else(|| builtin_scheme(dark))
 }
 
 /// Blend two `#rrggbb` colors; `amount` is the weight of `a`.

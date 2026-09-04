@@ -1,4 +1,4 @@
-//! Toolkit-independent core of RustPad.
+//! Toolkit-independent core of RusTXT.
 //!
 //! Nothing in here knows about GTK. The GUI crate drives these modules and
 //! stays a thin layer, which keeps documents, recovery storage, configuration

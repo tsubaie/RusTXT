@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install RustPad from the release tarball. Run as your user for a per-user
+# Install RusTXT from the release tarball. Run as your user for a per-user
 # install under ~/.local, or with sudo for a system-wide install under /usr/local.
 set -eu
 cd "$(dirname "$0")"
@@ -8,10 +8,10 @@ if [ "$(id -u)" -eq 0 ]; then
 else
   bin="$HOME/.local/bin"; share="$HOME/.local/share"
 fi
-install -Dm755 rustpad "$bin/rustpad"
-install -Dm644 com.tsubaie.rustpad.desktop "$share/applications/com.tsubaie.rustpad.desktop"
-install -Dm644 com.tsubaie.rustpad.svg "$share/icons/hicolor/scalable/apps/com.tsubaie.rustpad.svg"
+install -Dm755 rustxt "$bin/rustxt"
+install -Dm644 com.tsubaie.rustxt.desktop "$share/applications/com.tsubaie.rustxt.desktop"
+install -Dm644 com.tsubaie.rustxt.png "$share/icons/hicolor/512x512/apps/com.tsubaie.rustxt.png"
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$share/applications" || true
 command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q "$share/icons/hicolor" 2>/dev/null || true
-echo "Installed rustpad to $bin/rustpad"
+echo "Installed rustxt to $bin/rustxt"
 case ":$PATH:" in *":$bin:"*) ;; *) echo "Note: $bin is not on your PATH." ;; esac

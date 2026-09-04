@@ -1,9 +1,9 @@
 //! The Settings page: an adaptive libadwaita preferences dialog whose every
-//! control writes straight back to ~/.config/rustpad/config.toml.
+//! control writes straight back to ~/.config/rustxt/config.toml.
 
 use adw::prelude::*;
-use rustpad_core::config::{Config, Settings};
-use rustpad_core::desktop::TitlebarMode;
+use rustxt_core::config::{Config, Settings};
+use rustxt_core::desktop::TitlebarMode;
 use std::{cell::RefCell, rc::Rc};
 
 pub fn present(

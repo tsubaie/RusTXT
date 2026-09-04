@@ -363,7 +363,7 @@ impl FindBar {
         let replacement = self.replace_entry.text();
         self.with_attached(|context, _, _| {
             if let Err(error) = context.replace_all(&replacement) {
-                eprintln!("RustPad: replace all failed: {error}");
+                eprintln!("RusTXT: replace all failed: {error}");
             }
         });
         self.update_count();

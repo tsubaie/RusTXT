@@ -1,0 +1,51 @@
+[package]
+name = "rustxt"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description.workspace = true
+
+[[bin]]
+name = "rustxt"
+path = "src/main.rs"
+
+[dependencies]
+rustxt-core = { path = "../rustxt-core" }
+gtk = { package = "gtk4", version = "0.11", features = ["v4_16"] }
+adw = { package = "libadwaita", version = "0.9", features = ["v1_6"] }
+sourceview5 = "0.11"
+async-channel = "2"
+
+# Debian/Ubuntu package (cargo-deb). Paths are relative to this manifest.
+[package.metadata.deb]
+name = "rustxt"
+maintainer = "Talal A. Alsubaie <t.subaie@gmail.com>"
+copyright = "2026, Talal A. Alsubaie"
+license-file = ["../../LICENSE", "0"]
+extended-description = """\
+RusTXT is a dead simple, recoverable plain text editor: tabs that remember where you left off, unsaved work that survives a
+crash, find and replace that stays out of the way. Built with GTK 4,
+libadwaita and GtkSourceView."""
+section = "editors"
+priority = "optional"
+depends = "$auto"
+assets = [
+  ["target/release/rustxt", "usr/bin/", "755"],
+  ["../../data/com.tsubaie.rustxt.desktop", "usr/share/applications/", "644"],
+  ["../../data/icons/com.tsubaie.rustxt.png", "usr/share/icons/hicolor/512x512/apps/", "644"],
+  ["../../README.md", "usr/share/doc/rustxt/README.md", "644"],
+]
+
+# Fedora package (cargo-generate-rpm). Paths are relative to the workspace root.
+[package.metadata.generate-rpm]
+name = "rustxt"
+summary = "Dead simple, recoverable text editor built with GTK 4 and libadwaita"
+license = "MIT"
+url = "https://github.com/tsubaie/RusTXT"
+assets = [
+  { source = "target/release/rustxt", dest = "/usr/bin/rustxt", mode = "755" },
+  { source = "data/com.tsubaie.rustxt.desktop", dest = "/usr/share/applications/com.tsubaie.rustxt.desktop", mode = "644" },
+  { source = "data/icons/com.tsubaie.rustxt.png", dest = "/usr/share/icons/hicolor/512x512/apps/com.tsubaie.rustxt.png", mode = "644" },
+  { source = "LICENSE", dest = "/usr/share/licenses/rustxt/LICENSE", mode = "644", doc = true },
+  { source = "README.md", dest = "/usr/share/doc/rustxt/README.md", mode = "644", doc = true },
+]

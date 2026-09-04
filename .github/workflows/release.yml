@@ -30,7 +30,7 @@ jobs:
       - name: Version from tag
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
       - name: Build
-        run: cargo build --release --locked -p rustpad
+        run: cargo build --release --locked -p rustxt
       # makepkg refuses to run as root and would rebuild from scratch in its own
       # cargo home, so build above with the cache and let it only package (-R).
       - name: Package for Arch
@@ -43,14 +43,14 @@ jobs:
       - name: Build tarball
         run: |
           set -eu
-          dir="rustpad-$VERSION"
+          dir="rustxt-$VERSION"
           mkdir -p "dist/$dir"
-          cp target/release/rustpad data/com.tsubaie.rustpad.desktop data/icons/com.tsubaie.rustpad.svg LICENSE README.md packaging/tarball/install.sh "dist/$dir/"
-          tar -C dist -czf "dist/rustpad-$VERSION-x86_64-linux.tar.gz" "$dir"
+          cp target/release/rustxt data/com.tsubaie.rustxt.desktop data/icons/com.tsubaie.rustxt.png LICENSE README.md packaging/tarball/install.sh "dist/$dir/"
+          tar -C dist -czf "dist/rustxt-$VERSION-x86_64-linux.tar.gz" "$dir"
           rm -r "dist/$dir"
           mv packaging/arch/*.pkg.tar.zst dist/
-          sha=$(sha256sum "dist/rustpad-$VERSION-x86_64-linux.tar.gz" | cut -d' ' -f1)
-          sed -e "s/@VERSION@/$VERSION/" -e "s/@SHA256@/$sha/" packaging/aur/rustpad-bin/PKGBUILD > dist/PKGBUILD
+          sha=$(sha256sum "dist/rustxt-$VERSION-x86_64-linux.tar.gz" | cut -d' ' -f1)
+          sed -e "s/@VERSION@/$VERSION/" -e "s/@SHA256@/$sha/" packaging/aur/rustxt-bin/PKGBUILD > dist/PKGBUILD
       - uses: actions/upload-artifact@v4
         with:
           name: arch
@@ -79,7 +79,7 @@ jobs:
         run: cargo binstall -y --locked cargo-deb
       - name: Build .deb
         run: |
-          cargo deb -p rustpad --locked
+          cargo deb -p rustxt --locked
           mkdir -p dist && cp target/debian/*.deb dist/
       - uses: actions/upload-artifact@v4
         with:
@@ -104,8 +104,8 @@ jobs:
         run: cargo binstall -y --locked cargo-generate-rpm
       - name: Build .rpm
         run: |
-          cargo build --release --locked -p rustpad
-          cargo generate-rpm -p crates/rustpad-gtk
+          cargo build --release --locked -p rustxt
+          cargo generate-rpm -p crates/rustxt-gtk
           mkdir -p dist && cp target/generate-rpm/*.rpm dist/
       - uses: actions/upload-artifact@v4
         with:
@@ -132,10 +132,10 @@ jobs:
 
             | Distro | Command |
             |---|---|
-            | Arch / Omarchy | `sudo pacman -U rustpad-*.pkg.tar.zst` |
-            | Debian 13+ / Ubuntu 25.04+ | `sudo apt install ./rustpad_*_amd64.deb` |
-            | Fedora 42+ | `sudo dnf install ./rustpad-*.x86_64.rpm` |
+            | Arch / Omarchy | `sudo pacman -U rustxt-*.pkg.tar.zst` |
+            | Debian 13+ / Ubuntu 25.04+ | `sudo apt install ./rustxt_*_amd64.deb` |
+            | Fedora 42+ | `sudo dnf install ./rustxt-*.x86_64.rpm` |
             | Any Linux | extract the `.tar.gz` and run `./install.sh` |
 
-            RustPad needs GTK 4.16, libadwaita 1.6 and GtkSourceView 5 or newer.
+            RusTXT needs GTK 4.16, libadwaita 1.6 and GtkSourceView 5 or newer.
             Verify downloads against `SHA256SUMS`.

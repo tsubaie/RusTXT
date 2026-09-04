@@ -1,18 +1,18 @@
 #!/bin/sh
-# RustPad quick install for Linux on x86_64:
+# RusTXT quick install for Linux on x86_64:
 #
-#   curl -fsSL https://raw.githubusercontent.com/tsubaie/RustPad/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/tsubaie/RusTXT/main/install.sh | sh
 #
 # Downloads the latest release built for your distro, checks it against the
 # release's SHA256SUMS, and installs it with pacman, apt or dnf. On any other
 # Linux it unpacks the tarball into ~/.local instead. Nothing is compiled and
 # nothing outside the package is touched.
 #
-#   RUSTPAD_VERSION=0.2.1    install that release instead of the latest
-#   RUSTPAD_INSTALL=tarball  use the tarball even when a package would fit
+#   RUSTXT_VERSION=0.2.1    install that release instead of the latest
+#   RUSTXT_INSTALL=tarball  use the tarball even when a package would fit
 set -eu
 
-repo="tsubaie/RustPad"
+repo="tsubaie/RusTXT"
 
 say()  { printf '%s\n' "$*"; }
 fail() { say "install.sh: $*" >&2; exit 1; }
@@ -35,7 +35,7 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
 # Which release ---------------------------------------------------------------
-version="${RUSTPAD_VERSION:-}"
+version="${RUSTXT_VERSION:-}"
 if [ -z "$version" ]; then
   fetch "https://api.github.com/repos/$repo/releases/latest" "$tmp/release.json"
   version="$(sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' "$tmp/release.json" | head -n 1)"
@@ -44,7 +44,7 @@ fi
 base="https://github.com/$repo/releases/download/v$version"
 
 # Which package ---------------------------------------------------------------
-kind="${RUSTPAD_INSTALL:-}"
+kind="${RUSTXT_INSTALL:-}"
 if [ -z "$kind" ]; then
   if command -v pacman >/dev/null 2>&1; then kind=pacman
   elif command -v apt-get >/dev/null 2>&1 && command -v dpkg >/dev/null 2>&1; then kind=deb
@@ -53,15 +53,15 @@ if [ -z "$kind" ]; then
   fi
 fi
 case "$kind" in
-  pacman)  file="rustpad-$version-1-x86_64.pkg.tar.zst" ;;
-  deb)     file="rustpad_$version-1_amd64.deb" ;;
-  rpm)     file="rustpad-$version-1.x86_64.rpm" ;;
-  tarball) file="rustpad-$version-x86_64-linux.tar.gz" ;;
-  *)       fail "RUSTPAD_INSTALL must be pacman, deb, rpm or tarball" ;;
+  pacman)  file="rustxt-$version-1-x86_64.pkg.tar.zst" ;;
+  deb)     file="rustxt_$version-1_amd64.deb" ;;
+  rpm)     file="rustxt-$version-1.x86_64.rpm" ;;
+  tarball) file="rustxt-$version-x86_64-linux.tar.gz" ;;
+  *)       fail "RUSTXT_INSTALL must be pacman, deb, rpm or tarball" ;;
 esac
 
 # Download and verify ----------------------------------------------------------
-say "Downloading RustPad $version ($file)"
+say "Downloading RusTXT $version ($file)"
 fetch "$base/$file" "$tmp/$file" || fail "could not download $base/$file (is v$version a published release?)"
 fetch "$base/SHA256SUMS" "$tmp/SHA256SUMS" || fail "could not download $base/SHA256SUMS"
 expected="$(grep " $file\$" "$tmp/SHA256SUMS" | cut -d' ' -f1)"
@@ -71,14 +71,14 @@ actual="$(sha256sum "$tmp/$file" | cut -d' ' -f1)"
 
 # Install ----------------------------------------------------------------------
 if [ "$kind" != tarball ] && [ -z "$sudo" ] && [ "$(id -u)" -ne 0 ]; then
-  fail "installing a package needs root or sudo. Set RUSTPAD_INSTALL=tarball for a per-user install."
+  fail "installing a package needs root or sudo. Set RUSTXT_INSTALL=tarball for a per-user install."
 fi
 case "$kind" in
   pacman)  $sudo pacman -U --noconfirm "$tmp/$file" ;;
   deb)     $sudo apt-get install -y "$tmp/$file" ;;
   rpm)     $sudo dnf install -y "$tmp/$file" ;;
-  tarball) tar -C "$tmp" -xzf "$tmp/$file" && sh "$tmp/rustpad-$version/install.sh" ;;
+  tarball) tar -C "$tmp" -xzf "$tmp/$file" && sh "$tmp/rustxt-$version/install.sh" ;;
 esac
 
 say ""
-say "RustPad $version is installed. Find it in your app menu or run: rustpad"
+say "RusTXT $version is installed. Find it in your app menu or run: rustxt"

@@ -1,13 +1,13 @@
 [workspace]
 resolver = "2"
-members = ["crates/rustpad-core", "crates/rustpad-gtk"]
+members = ["crates/rustxt-core", "crates/rustxt-gtk"]
 
 [workspace.package]
 version = "0.3.0"
 edition = "2021"
 license = "MIT"
 description = "A dead simple, recoverable plain text editor"
-repository = "https://github.com/tsubaie/RustPad"
+repository = "https://github.com/tsubaie/RusTXT"
 
 [profile.release]
 lto = "thin"

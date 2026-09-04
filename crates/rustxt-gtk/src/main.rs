@@ -1,5 +1,5 @@
-//! RustPad: a dead simple, recoverable plain text editor
-//! built with GTK 4, libadwaita and GtkSourceView on top of `rustpad-core`.
+//! RusTXT: a dead simple, recoverable plain text editor
+//! built with GTK 4, libadwaita and GtkSourceView on top of `rustxt-core`.
 
 mod about_dialog;
 mod document;
@@ -13,7 +13,7 @@ mod window;
 use adw::prelude::*;
 use gtk::{gio, glib};
 
-pub const APP_ID: &str = "com.tsubaie.rustpad";
+pub const APP_ID: &str = "com.tsubaie.rustxt";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() -> glib::ExitCode {
@@ -27,9 +27,9 @@ fn main() -> glib::ExitCode {
         theme::install_base_css();
         menus::install_accelerators(app);
     });
-    app.connect_activate(|app| window::RustPadWindow::obtain(app).present());
+    app.connect_activate(|app| window::RustxtWindow::obtain(app).present());
     app.connect_open(|app, files, _hint| {
-        let window = window::RustPadWindow::obtain(app);
+        let window = window::RustxtWindow::obtain(app);
         window.present();
         for file in files {
             if let Some(path) = file.path() {

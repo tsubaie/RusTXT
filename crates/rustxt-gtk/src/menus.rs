@@ -96,7 +96,7 @@ pub fn build() -> Menus {
 
     let settings = gio::Menu::new();
     settings.append_section(None, &section(&[("_Settings…", "win.settings")]));
-    settings.append_section(None, &section(&[("_About RustPad", "win.about")]));
+    settings.append_section(None, &section(&[("_About RusTXT", "win.about")]));
 
     let bar = gio::Menu::new();
     bar.append_submenu(Some("_File"), &file);

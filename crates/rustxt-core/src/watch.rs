@@ -36,7 +36,7 @@ pub fn watch(
     }
 
     thread::Builder::new()
-        .name("rustpad-config-watch".into())
+        .name("rustxt-config-watch".into())
         .spawn(move || loop {
             // Block for the first event, then absorb the burst that follows it.
             if receiver.recv().is_err() {

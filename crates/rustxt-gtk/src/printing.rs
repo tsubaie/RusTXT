@@ -25,6 +25,6 @@ pub fn print(parent: &impl IsA<gtk::Window>, view: &sourceview5::View, title: &s
     operation.connect_draw_page(move |_, context, page| draw.draw_page(context, page));
 
     if let Err(error) = operation.run(gtk::PrintOperationAction::PrintDialog, Some(parent)) {
-        eprintln!("RustPad: printing failed: {error}");
+        eprintln!("RusTXT: printing failed: {error}");
     }
 }

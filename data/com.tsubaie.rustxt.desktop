@@ -1,13 +1,13 @@
 [Desktop Entry]
-Name=RustPad
+Name=RusTXT
 GenericName=Text Editor
 Comment=A fast, recoverable text editor
-Exec=rustpad %F
-Icon=com.tsubaie.rustpad
+Exec=rustxt %F
+Icon=com.tsubaie.rustxt
 Terminal=false
 Type=Application
 Categories=Utility;TextEditor;GTK;
 MimeType=text/plain;
 StartupNotify=true
-StartupWMClass=com.tsubaie.rustpad
+StartupWMClass=com.tsubaie.rustxt
 Keywords=notepad;text;editor;

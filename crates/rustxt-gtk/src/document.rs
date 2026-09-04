@@ -2,7 +2,7 @@
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
-use rustpad_core::storage::DocumentState;
+use rustxt_core::storage::DocumentState;
 use sourceview5::prelude::*;
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
@@ -55,7 +55,7 @@ impl Document {
         view.set_auto_indent(false);
         view.set_tab_width(4);
         view.set_smart_home_end(sourceview5::SmartHomeEndType::Before);
-        view.add_css_class("rustpad-editor");
+        view.add_css_class("rustxt-editor");
 
         let scroller = gtk::ScrolledWindow::builder()
             .child(&view)
@@ -120,7 +120,7 @@ impl Document {
 
     pub fn window_title(&self) -> String {
         format!(
-            "{}{} - RustPad",
+            "{}{} - RusTXT",
             if self.is_dirty() { "*" } else { "" },
             self.title()
         )

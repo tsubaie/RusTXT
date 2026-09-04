@@ -1,18 +1,15 @@
 //! The About dialog: logo, version, a one-line pitch and where to find the
-//! source. The logo is embedded so it shows even without an installed icon
-//! theme.
+//! source. The logo carries the wordmark, so there is no separate name label.
+//! It is embedded so it shows even without an installed icon theme.
 
 use adw::prelude::*;
 
-const REPOSITORY: &str = "https://github.com/tsubaie/RustPad";
+const REPOSITORY: &str = "https://github.com/tsubaie/RusTXT";
 
 pub fn present(parent: &impl IsA<gtk::Widget>) {
     let logo = gtk::Image::from_paintable(Some(&crate::theme::logo_texture()));
     logo.set_pixel_size(128);
     logo.set_margin_bottom(6);
-
-    let name = gtk::Label::new(Some("RustPad"));
-    name.add_css_class("title-1");
 
     let version = gtk::Label::new(Some(&format!("Version {}", crate::VERSION)));
     version.add_css_class("dim-label");
@@ -51,7 +48,6 @@ pub fn present(parent: &impl IsA<gtk::Widget>) {
     content.set_margin_end(24);
     for widget in [
         logo.upcast_ref::<gtk::Widget>(),
-        name.upcast_ref(),
         version.upcast_ref(),
         pitch.upcast_ref(),
         links.upcast_ref(),
@@ -66,7 +62,7 @@ pub fn present(parent: &impl IsA<gtk::Widget>) {
     view.set_content(Some(&content));
 
     let dialog = adw::Dialog::new();
-    dialog.set_title("About RustPad");
+    dialog.set_title("About RusTXT");
     dialog.set_content_width(380);
     dialog.set_child(Some(&view));
     dialog.present(Some(parent));

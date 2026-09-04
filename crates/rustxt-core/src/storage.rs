@@ -9,8 +9,12 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
-/// How many "closed for now" tabs are retained for reopening.
+/// How many clean "closed for now" tabs (saved files) are retained for
+/// reopening. Tabs holding unsaved text are never pruned; only a discard
+/// removes them.
 pub const MAX_CLOSED: i64 = 20;
+/// Longest first-line preview used to label a closed note.
+const PREVIEW_CHARS: usize = 40;
 /// How many recently closed tabs the UI lists.
 pub const LISTED_CLOSED: i64 = 10;
 
@@ -87,6 +91,20 @@ impl DocumentState {
             line_ending,
         }
     }
+}
+
+/// The label a closed note gets in the Recently closed menu: its first
+/// non-blank line, shortened, so notes are told apart by what they say
+/// instead of all reading "Untitled 1". Files keep their file name.
+pub fn preview_title(content: &str, fallback: &str) -> String {
+    let Some(line) = content.lines().map(str::trim).find(|line| !line.is_empty()) else {
+        return fallback.to_string();
+    };
+    let mut preview: String = line.chars().take(PREVIEW_CHARS).collect();
+    if line.chars().count() > PREVIEW_CHARS {
+        preview.push('\u{2026}');
+    }
+    preview
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -166,8 +184,15 @@ impl Storage {
         Ok(Self { connection })
     }
 
-    /// Write the full recovery snapshot for one open document.
+    /// Write the recovery snapshot for one open document. A clean file-backed
+    /// document stores no text: the file is authoritative and is reloaded on
+    /// restore, so the database only ever holds what is not on disk.
     pub fn save_snapshot(&self, document: &DocumentState) -> Result<(), String> {
+        let content = if document.file_path.is_some() && !document.dirty {
+            ""
+        } else {
+            document.content.as_str()
+        };
         self.connection
             .execute(
                 "INSERT INTO documents (id, file_path, title, content, dirty, cursor_offset, scroll_top,
@@ -183,7 +208,7 @@ impl Storage {
                     document.id,
                     document.file_path,
                     document.title,
-                    document.content,
+                    content,
                     document.dirty,
                     document.cursor_offset,
                     document.scroll_top,
@@ -283,16 +308,23 @@ impl Storage {
         let mut statement = self
             .connection
             .prepare(
-                "SELECT id, title, file_path, dirty, closed_at FROM documents
+                "SELECT id, title, file_path, dirty, closed_at, content FROM documents
                  WHERE is_open = 0 ORDER BY closed_at DESC, updated_at DESC LIMIT ?1",
             )
             .map_err(text)?;
         let closed = statement
             .query_map([LISTED_CLOSED], |row| {
+                let file_path: Option<String> = row.get(2)?;
+                let stored_title: String = row.get(1)?;
+                let title = if file_path.is_some() {
+                    stored_title
+                } else {
+                    preview_title(&row.get::<_, String>(5)?, &stored_title)
+                };
                 Ok(ClosedDocument {
                     id: row.get(0)?,
-                    title: row.get(1)?,
-                    file_path: row.get(2)?,
+                    title,
+                    file_path,
                     dirty: row.get(3)?,
                     closed_at: row.get::<_, Option<i64>>(4)?.unwrap_or(0),
                 })
@@ -369,11 +401,22 @@ fn ensure_column(connection: &Connection, name: &str, definition: &str) -> Resul
     Ok(())
 }
 
+/// Closed tabs are kept so they can be reopened, within limits. An empty
+/// untitled tab has nothing to recover and is dropped. Tabs with unsaved
+/// text are kept until the user discards them. Everything else, which is
+/// saved files, is capped at the most recent [`MAX_CLOSED`].
 fn prune_closed(connection: &Connection) -> Result<(), String> {
     connection
         .execute(
-            "DELETE FROM documents WHERE is_open = 0 AND id NOT IN (
-                SELECT id FROM documents WHERE is_open = 0
+            "DELETE FROM documents WHERE is_open = 0 AND file_path IS NULL
+                AND trim(content, ' \t\r\n') = ''",
+            [],
+        )
+        .map_err(text)?;
+    connection
+        .execute(
+            "DELETE FROM documents WHERE is_open = 0 AND dirty = 0 AND id NOT IN (
+                SELECT id FROM documents WHERE is_open = 0 AND dirty = 0
                 ORDER BY closed_at DESC, updated_at DESC LIMIT ?1)",
             [MAX_CLOSED],
         )
@@ -469,23 +512,110 @@ mod tests {
         assert!(storage.reopen_document("a").unwrap().is_none());
     }
 
-    #[test]
-    fn closed_documents_are_pruned() {
-        let (_dir, storage) = storage();
-        for index in 0..(MAX_CLOSED + 5) {
-            let id = format!("doc{index}");
-            storage.save_snapshot(&document(&id, index)).unwrap();
-            storage.close_document(&id, false).unwrap();
+    fn saved_file(id: &str, position: i64) -> DocumentState {
+        DocumentState {
+            file_path: Some(format!("/tmp/{id}.txt")),
+            title: format!("{id}.txt"),
+            dirty: false,
+            ..document(id, position)
         }
-        let total: i64 = storage
+    }
+
+    fn closed_count(storage: &Storage) -> i64 {
+        storage
             .connection
             .query_row(
                 "SELECT COUNT(*) FROM documents WHERE is_open = 0",
                 [],
                 |row| row.get(0),
             )
-            .unwrap();
-        assert_eq!(total, MAX_CLOSED);
+            .unwrap()
+    }
+
+    #[test]
+    fn closed_saved_files_are_pruned_to_the_cap() {
+        let (_dir, storage) = storage();
+        for index in 0..(MAX_CLOSED + 5) {
+            let id = format!("doc{index}");
+            storage.save_snapshot(&saved_file(&id, index)).unwrap();
+            storage.close_document(&id, false).unwrap();
+        }
+        assert_eq!(closed_count(&storage), MAX_CLOSED);
+    }
+
+    #[test]
+    fn closed_notes_with_unsaved_text_are_never_pruned() {
+        let (_dir, storage) = storage();
+        for index in 0..(MAX_CLOSED + 5) {
+            let id = format!("note{index}");
+            storage.save_snapshot(&document(&id, index)).unwrap();
+            storage.close_document(&id, false).unwrap();
+        }
+        // Saved files still get capped on their own, without touching notes.
+        for index in 0..(MAX_CLOSED + 5) {
+            let id = format!("file{index}");
+            storage.save_snapshot(&saved_file(&id, index)).unwrap();
+            storage.close_document(&id, false).unwrap();
+        }
+        assert_eq!(closed_count(&storage), MAX_CLOSED + 5 + MAX_CLOSED);
+        assert!(storage.reopen_document("note0").unwrap().is_some());
+    }
+
+    #[test]
+    fn closing_an_empty_untitled_tab_drops_it() {
+        let (_dir, storage) = storage();
+        let mut blank = document("blank", 0);
+        blank.content = " \n\t\n".into();
+        storage.save_snapshot(&blank).unwrap();
+        storage.save_snapshot(&document("kept", 1)).unwrap();
+        storage.close_document("blank", false).unwrap();
+        storage.close_document("kept", false).unwrap();
+        let ids: Vec<_> = storage
+            .closed_documents()
+            .unwrap()
+            .into_iter()
+            .map(|doc| doc.id)
+            .collect();
+        assert_eq!(ids, ["kept"]);
+    }
+
+    #[test]
+    fn clean_saved_files_store_no_text() {
+        let (_dir, storage) = storage();
+        storage.save_snapshot(&saved_file("clean", 0)).unwrap();
+        let mut edited = saved_file("edited", 1);
+        edited.dirty = true;
+        storage.save_snapshot(&edited).unwrap();
+        let stored = |id: &str| storage.reopen_document(id).unwrap().unwrap().content;
+        assert_eq!(stored("clean"), "");
+        assert_eq!(stored("edited"), "content edited");
+    }
+
+    #[test]
+    fn closed_notes_are_labelled_by_their_first_line() {
+        let (_dir, storage) = storage();
+        let mut note = document("note", 0);
+        note.content = "\n  Shopping list  \nmilk\n".into();
+        storage.save_snapshot(&note).unwrap();
+        let mut long = document("long", 1);
+        long.content = "x".repeat(PREVIEW_CHARS + 1);
+        storage.save_snapshot(&long).unwrap();
+        storage.save_snapshot(&saved_file("file", 2)).unwrap();
+        for id in ["note", "long", "file"] {
+            storage.close_document(id, false).unwrap();
+        }
+        let titles: Vec<_> = storage
+            .closed_documents()
+            .unwrap()
+            .into_iter()
+            .map(|doc| (doc.id, doc.title))
+            .collect();
+        let mut expected_long = "x".repeat(PREVIEW_CHARS);
+        expected_long.push('\u{2026}');
+        assert!(titles.contains(&("note".into(), "Shopping list".into())));
+        assert!(titles.contains(&("long".into(), expected_long)));
+        assert!(titles.contains(&("file".into(), "file.txt".into())));
+        assert_eq!(preview_title("", "Untitled 4"), "Untitled 4");
     }
 
     #[test]

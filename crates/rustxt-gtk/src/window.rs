@@ -1,10 +1,10 @@
 //! The main window: tab strip, classic menu bar, editor area with the
 //! floating find bar, status bar, and all the actions behind the menus.
-//! Persistence, configuration and theming come from `rustpad-core`.
+//! Persistence, configuration and theming come from `rustxt-core`.
 
 use adw::prelude::*;
 use gtk::{gdk, gio, glib};
-use rustpad_core::{
+use rustxt_core::{
     config::{self, Config, Paths, Settings},
     files,
     storage::{ClosedDocument, DocumentState, LineEnding, Storage},
@@ -31,7 +31,7 @@ const ZOOM_STEP: u32 = 10;
 const SNAPSHOT_DELAY: Duration = Duration::from_millis(400);
 
 thread_local! {
-    static INSTANCE: RefCell<Option<Rc<RustPadWindow>>> = const { RefCell::new(None) };
+    static INSTANCE: RefCell<Option<Rc<RustxtWindow>>> = const { RefCell::new(None) };
 }
 
 struct StatusBar {
@@ -45,7 +45,7 @@ struct StatusBar {
 impl StatusBar {
     fn new() -> Self {
         let root = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        root.add_css_class("rustpad-status");
+        root.add_css_class("rustxt-status");
         let label = |text: &str| {
             let label = gtk::Label::new(Some(text));
             label.set_xalign(0.0);
@@ -72,7 +72,7 @@ impl StatusBar {
     }
 }
 
-pub struct RustPadWindow {
+pub struct RustxtWindow {
     pub window: adw::ApplicationWindow,
     header: adw::HeaderBar,
     title_widget: adw::WindowTitle,
@@ -98,7 +98,7 @@ pub struct RustPadWindow {
     _watcher: RefCell<Option<ConfigWatcher>>,
 }
 
-impl RustPadWindow {
+impl RustxtWindow {
     /// The single main window, created on first use.
     pub fn obtain(app: &adw::Application) -> Rc<Self> {
         INSTANCE.with(|instance| {
@@ -116,18 +116,18 @@ impl RustPadWindow {
     fn new(app: &adw::Application) -> Rc<Self> {
         let paths = Paths::discover();
         if let Err(error) = config::ensure_config_file(&paths) {
-            eprintln!("RustPad: could not write default config: {error}");
+            eprintln!("RusTXT: could not write default config: {error}");
         }
         let storage = Storage::open(&paths.session_db()).unwrap_or_else(|error| {
-            eprintln!("RustPad: recovery database unavailable ({error}); using a temporary one");
-            Storage::open(&std::env::temp_dir().join("rustpad-session.db"))
+            eprintln!("RusTXT: recovery database unavailable ({error}); using a temporary one");
+            Storage::open(&std::env::temp_dir().join("rustxt-session.db"))
                 .expect("cannot open a recovery database anywhere")
         });
         let settings = config::settings(&paths);
 
         // --- widgets -----------------------------------------------------------
         let window = adw::ApplicationWindow::new(app);
-        window.set_title(Some("RustPad"));
+        window.set_title(Some("RusTXT"));
         window.set_size_request(560, 360);
         let mut maximized = false;
         let mut size = (1000, 700);
@@ -143,7 +143,7 @@ impl RustPadWindow {
             window.maximize();
         }
 
-        let title_widget = adw::WindowTitle::new("RustPad", "");
+        let title_widget = adw::WindowTitle::new("RusTXT", "");
         let header = adw::HeaderBar::new();
         header.set_title_widget(Some(&title_widget));
 
@@ -163,7 +163,7 @@ impl RustPadWindow {
         let menus = menus::build();
         let menubar = gtk::PopoverMenuBar::from_model(Some(&menus.bar));
         let menu_row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        menu_row.add_css_class("rustpad-menubar");
+        menu_row.add_css_class("rustxt-menubar");
         menu_row.append(&menubar);
 
         let search_settings = sourceview5::SearchSettings::new();
@@ -246,7 +246,15 @@ impl RustPadWindow {
         let session = self.storage.borrow().restore_session();
         match session {
             Ok(mut session) => {
+                let before: Vec<String> = session.documents.iter().map(|d| d.id.clone()).collect();
                 files::refresh_from_disk(&mut session.documents);
+                for id in before
+                    .iter()
+                    .filter(|id| !session.documents.iter().any(|d| &d.id == *id))
+                {
+                    // A saved file that no longer exists has nothing to restore.
+                    self.report(self.storage.borrow().close_document(id, true));
+                }
                 for state in session.documents {
                     self.add_document(state);
                 }
@@ -446,7 +454,7 @@ impl RustPadWindow {
         self.tab_view.close_page_finish(page, true);
         self.refresh_closed();
         if self.tab_view.n_pages() == 0 {
-            // Closing the last tab closes RustPad. The snapshot
+            // Closing the last tab closes RusTXT. The snapshot
             // stays in the recovery database unless it was discarded.
             self.persist_layout();
             self.window.close();
@@ -459,8 +467,15 @@ impl RustPadWindow {
     fn reopen(self: &Rc<Self>, id: &str) {
         let reopened = self.storage.borrow().reopen_document(id);
         match reopened {
-            Ok(Some(mut state)) => {
-                files::refresh_from_disk(std::slice::from_mut(&mut state));
+            Ok(Some(state)) => {
+                let mut refreshed = vec![state];
+                files::refresh_from_disk(&mut refreshed);
+                let Some(mut state) = refreshed.pop() else {
+                    self.report(self.storage.borrow().close_document(id, true));
+                    self.show_error("That file is no longer on disk.");
+                    self.refresh_closed();
+                    return;
+                };
                 if state.file_path.is_none()
                     && self.docs.borrow().iter().any(|d| d.title() == state.title)
                 {
@@ -498,7 +513,7 @@ impl RustPadWindow {
     fn refresh_closed(&self) {
         match self.storage.borrow().closed_documents() {
             Ok(closed) => *self.closed.borrow_mut() = closed,
-            Err(error) => eprintln!("RustPad: {error}"),
+            Err(error) => eprintln!("RusTXT: {error}"),
         }
         let menu = &self.menus.recently_closed;
         menu.remove_all();
@@ -508,10 +523,12 @@ impl RustPadWindow {
             menu.append(Some("Nothing to reopen"), Some("win.unavailable"));
         }
         for doc in closed.iter() {
+            // Menu labels treat "_" as a mnemonic marker; show it literally.
+            let title = doc.title.replace('_', "__");
             let label = if doc.dirty {
-                format!("{} •", doc.title)
+                format!("{title} •")
             } else {
-                doc.title.clone()
+                title
             };
             let item = gio::MenuItem::new(Some(&label), None);
             item.set_action_and_target_value(Some("win.reopen"), Some(&doc.id.to_variant()));
@@ -625,7 +642,7 @@ impl RustPadWindow {
             let _ = sender.send_blocking(());
         }) {
             Ok(watcher) => *self._watcher.borrow_mut() = Some(watcher),
-            Err(error) => eprintln!("RustPad: config watching disabled: {error}"),
+            Err(error) => eprintln!("RusTXT: config watching disabled: {error}"),
         }
         let this = self.clone();
         glib::spawn_future_local(async move {
@@ -660,7 +677,7 @@ impl RustPadWindow {
         let title = self
             .active()
             .map(|doc| doc.window_title())
-            .unwrap_or_else(|| "RustPad".into());
+            .unwrap_or_else(|| "RusTXT".into());
         self.window.set_title(Some(&title));
         self.title_widget.set_title(&title);
     }
@@ -709,8 +726,8 @@ impl RustPadWindow {
     }
 
     fn show_error(&self, message: &str) {
-        eprintln!("RustPad: {message}");
-        let dialog = adw::AlertDialog::new(Some("RustPad"), Some(message));
+        eprintln!("RusTXT: {message}");
+        let dialog = adw::AlertDialog::new(Some("RusTXT"), Some(message));
         dialog.add_responses(&[("ok", "_OK")]);
         dialog.set_default_response(Some("ok"));
         dialog.set_close_response("ok");

@@ -53,22 +53,32 @@ pub fn save_document(state: &mut DocumentState, path: &Path) -> Result<(), Strin
     Ok(())
 }
 
-/// Clean file-backed documents restored from the database may be stale: the
-/// file is authoritative, so reload it. If the file is gone, keep the snapshot
-/// and mark it dirty so the user knows it is no longer on disk.
-pub fn refresh_from_disk(documents: &mut [DocumentState]) {
-    for document in documents.iter_mut().filter(|d| !d.dirty) {
+/// Clean file-backed documents carry no snapshot text, because the file is
+/// authoritative, so reload them from disk. One whose file has gone missing
+/// is dropped from the list when there is nothing to show. Databases written
+/// before snapshots went text-free may still hold its text; that is kept and
+/// marked dirty so the user knows it is no longer on disk.
+pub fn refresh_from_disk(documents: &mut Vec<DocumentState>) {
+    documents.retain_mut(|document| {
+        if document.dirty {
+            return true;
+        }
         let Some(path) = document.file_path.as_deref() else {
-            continue;
+            return true;
         };
         match fs::read_to_string(path) {
             Ok(raw) => {
                 document.line_ending = LineEnding::detect(&raw);
                 document.content = normalize(&raw);
+                true
             }
-            Err(_) => document.dirty = true,
+            Err(_) if document.content.is_empty() => false,
+            Err(_) => {
+                document.dirty = true;
+                true
+            }
         }
-    }
+    });
 }
 
 /// Write through a temporary file in the same directory, then rename it over
@@ -203,8 +213,17 @@ mod tests {
             base("clean", &present, false),
             base("dirty", &present, true),
             base("missing", &dir.path().join("gone.txt"), false),
+            DocumentState {
+                content: String::new(),
+                ..base("textless", &dir.path().join("gone-too.txt"), false)
+            },
         ];
         refresh_from_disk(&mut docs);
+        assert_eq!(
+            docs.len(),
+            3,
+            "a missing file with no stored text is dropped"
+        );
         assert_eq!(docs[0].content, "on disk");
         assert_eq!(
             docs[1].content, "snapshot",

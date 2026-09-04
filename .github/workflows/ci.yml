@@ -38,4 +38,4 @@ jobs:
       - name: Tests
         run: cargo test --workspace --locked
       - name: Release build
-        run: cargo build --release --locked -p rustpad
+        run: cargo build --release --locked -p rustxt

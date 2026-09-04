@@ -1,10 +1,10 @@
 //! User configuration and theme resolution. Tauri-free.
 //!
-//! Everything the user can tune lives in `$XDG_CONFIG_HOME/rustpad/config.toml`
-//! (normally `~/.config/rustpad/config.toml`), following the same convention as
+//! Everything the user can tune lives in `$XDG_CONFIG_HOME/rustxt/config.toml`
+//! (normally `~/.config/rustxt/config.toml`), following the same convention as
 //! every other desktop application. Custom themes are TOML files in
-//! `~/.config/rustpad/themes/`. On Omarchy the active theme's `colors.toml`
-//! is read directly, so RustPad follows the desktop theme with no setup.
+//! `~/.config/rustxt/themes/`. On Omarchy the active theme's `colors.toml`
+//! is read directly, so RusTXT follows the desktop theme with no setup.
 
 use crate::desktop::{self, TitlebarMode};
 use crate::files;
@@ -15,7 +15,7 @@ use std::{
 };
 
 pub const CONFIG_HEADER: &str = "\
-# RustPad configuration.
+# RusTXT configuration.
 #
 # appearance.theme: \"auto\" (Omarchy theme when available, otherwise the system
 #   light/dark setting), \"system\", \"light\", \"dark\", \"omarchy\", or the name of a
@@ -28,7 +28,7 @@ pub const CONFIG_HEADER: &str = "\
 # window.title_bar: \"auto\" hides the native title bar on tiling compositors such
 #   as Hyprland and keeps it elsewhere; \"show\" and \"hide\" force it.
 #
-# Changes made here apply immediately while RustPad is running.
+# Changes made here apply immediately while RusTXT is running.
 
 ";
 
@@ -101,21 +101,21 @@ impl Config {
     }
 }
 
-/// Where RustPad's own files and the Omarchy theme state live.
+/// Where RusTXT's own files and the Omarchy theme state live.
 #[derive(Debug, Clone)]
 pub struct Paths {
-    /// `~/.config/rustpad`
+    /// `~/.config/rustxt`
     pub config_dir: PathBuf,
-    /// `~/.local/share/rustpad`
+    /// `~/.local/share/rustxt`
     pub data_dir: PathBuf,
-    /// `~/.cache/rustpad`
+    /// `~/.cache/rustxt`
     pub cache_dir: PathBuf,
     /// `~/.local/state/omarchy/current/theme`
     pub omarchy_theme_dir: PathBuf,
 }
 
 impl Paths {
-    /// Standard XDG locations: `~/.config/rustpad` and the Omarchy theme state.
+    /// Standard XDG locations: `~/.config/rustxt` and the Omarchy theme state.
     /// The same layout is used on macOS so the config is where users expect a
     /// dotfile-style editor to keep it.
     pub fn discover() -> Self {
@@ -128,11 +128,25 @@ impl Paths {
                 .filter(|p| p.is_absolute())
                 .unwrap_or_else(|| home.join(fallback))
         };
-        Self {
-            config_dir: xdg("XDG_CONFIG_HOME", ".config").join("rustpad"),
-            data_dir: xdg("XDG_DATA_HOME", ".local/share").join("rustpad"),
-            cache_dir: xdg("XDG_CACHE_HOME", ".cache").join("rustpad"),
+        let paths = Self {
+            config_dir: xdg("XDG_CONFIG_HOME", ".config").join("rustxt"),
+            data_dir: xdg("XDG_DATA_HOME", ".local/share").join("rustxt"),
+            cache_dir: xdg("XDG_CACHE_HOME", ".cache").join("rustxt"),
             omarchy_theme_dir: xdg("XDG_STATE_HOME", ".local/state").join("omarchy/current/theme"),
+        };
+        paths.adopt_previous_name();
+        paths
+    }
+
+    /// The editor used to be called RustPad. Carry settings, themes and the
+    /// recovery database over from the old directories the first time the new
+    /// ones are missing, so nothing is lost across the rename.
+    fn adopt_previous_name(&self) {
+        for dir in [&self.config_dir, &self.data_dir] {
+            let old = dir.with_file_name("rustpad");
+            if !dir.exists() && old.is_dir() {
+                let _ = std::fs::rename(&old, dir);
+            }
         }
     }
 
@@ -352,8 +366,8 @@ pub fn resolve_theme(requested: &str, paths: &Paths) -> ResolvedTheme {
 }
 
 fn omarchy_theme(requested: &str, paths: &Paths) -> ResolvedTheme {
-    // A theme may ship an explicit rustpad.toml; otherwise derive from colors.toml.
-    let explicit = paths.omarchy_theme_dir.join("rustpad.toml");
+    // A theme may ship an explicit rustxt.toml; otherwise derive from colors.toml.
+    let explicit = paths.omarchy_theme_dir.join("rustxt.toml");
     let palette = if explicit.is_file() {
         read_palette(&explicit)
     } else {
@@ -385,7 +399,7 @@ fn read_palette(path: &Path) -> Result<Palette, String> {
     }
 }
 
-/// Map an Omarchy `colors.toml` onto RustPad's palette.
+/// Map an Omarchy `colors.toml` onto RusTXT's palette.
 pub fn palette_from_omarchy_colors(text: &str) -> Result<Palette, String> {
     let table: toml::Table = toml::from_str(text).map_err(|e| e.message().to_string())?;
     let get = |key: &str| table.get(key).and_then(|v| v.as_str()).map(str::to_string);
@@ -441,9 +455,9 @@ blue = "#89b4fa"
 
     fn paths(root: &Path) -> Paths {
         Paths {
-            config_dir: root.join("config/rustpad"),
-            data_dir: root.join("data/rustpad"),
-            cache_dir: root.join("cache/rustpad"),
+            config_dir: root.join("config/rustxt"),
+            data_dir: root.join("data/rustxt"),
+            cache_dir: root.join("cache/rustxt"),
             omarchy_theme_dir: root.join("state/omarchy/current/theme"),
         }
     }
@@ -474,7 +488,7 @@ blue = "#89b4fa"
         save(&paths, &config).unwrap();
         assert!(fs::read_to_string(paths.config_file())
             .unwrap()
-            .starts_with("# RustPad configuration."));
+            .starts_with("# RusTXT configuration."));
         assert_eq!(load(&paths).config, config);
 
         fs::write(paths.config_file(), "[appearance]\nzoom = 900\n").unwrap();
@@ -523,13 +537,13 @@ blue = "#89b4fa"
     }
 
     #[test]
-    fn explicit_rustpad_toml_in_theme_wins_over_derivation() {
+    fn explicit_rustxt_toml_in_theme_wins_over_derivation() {
         let dir = tempfile::tempdir().unwrap();
         let paths = paths(dir.path());
         fs::create_dir_all(&paths.omarchy_theme_dir).unwrap();
         fs::write(paths.omarchy_theme_dir.join("colors.toml"), OMARCHY_COLORS).unwrap();
         fs::write(
-            paths.omarchy_theme_dir.join("rustpad.toml"),
+            paths.omarchy_theme_dir.join("rustxt.toml"),
             "mode = \"light\"\nbackground = \"#ffffff\"\nforeground = \"#000000\"\n",
         )
         .unwrap();
