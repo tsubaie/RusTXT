@@ -40,7 +40,10 @@ impl Release {
     }
 
     pub fn is_newer_than(&self, current: &str) -> bool {
-        version_key(self.version()) > version_key(current)
+        let Ok(candidate) = semver::Version::parse(self.version()) else {
+            return false;
+        };
+        semver::Version::parse(current).is_ok_and(|current| candidate > current)
     }
 
     /// The name of the tarball built for this machine.
@@ -56,17 +59,6 @@ impl Release {
     fn asset(&self, name: &str) -> Option<&Asset> {
         self.assets.iter().find(|asset| asset.name == name)
     }
-}
-
-/// Numeric parts of a version, so "0.10.0" sorts after "0.9.1" and a tag
-/// with or without a `v` compares the same. Anything non-numeric counts as 0.
-fn version_key(version: &str) -> Vec<u64> {
-    version
-        .trim()
-        .trim_start_matches('v')
-        .split(['.', '-'])
-        .map(|part| part.parse().unwrap_or(0))
-        .collect()
 }
 
 pub fn parse_release(json: &str) -> Result<Release, String> {
@@ -161,29 +153,38 @@ pub fn install(release: &Release, target: &Path) -> Result<(), String> {
     let sums = release
         .asset(CHECKSUMS)
         .ok_or_else(|| format!("Version {} ships no checksums.", release.version()))?;
+    let expected_prefix = format!(
+        "https://github.com/tsubaie/RusTXT/releases/download/{}/",
+        release.tag
+    );
+    let trusted =
+        |url: &str| url.starts_with(&expected_prefix) || (cfg!(test) && url.starts_with("file://"));
+    if !trusted(&tarball.url) || !trusted(&sums.url) {
+        return Err("GitHub returned an unexpected release download location.".into());
+    }
 
     let work = tempfile::tempdir().map_err(text)?;
     let archive = work.path().join(&name);
     curl(&["-o", &archive.to_string_lossy(), &tarball.url])?;
     verify_checksum(&archive, &curl(&[&sums.url])?, &name)?;
 
-    let status = Command::new("tar")
-        .arg("-xzf")
+    let member = format!("rustxt-{}/rustxt", release.version());
+    // Extract only the expected member to stdout. This prevents an otherwise
+    // valid archive from using absolute or `..` paths to write outside `work`.
+    let output = Command::new("tar")
+        .arg("-xOzf")
         .arg(&archive)
-        .arg("-C")
-        .arg(work.path())
-        .status()
+        .arg(&member)
+        .output()
         .map_err(|error| format!("tar is needed to unpack the update: {error}"))?;
-    if !status.success() {
+    if !output.status.success() {
         return Err("The download could not be unpacked.".into());
     }
-    let binary = work
-        .path()
-        .join(format!("rustxt-{}", release.version()))
-        .join("rustxt");
-    if !binary.is_file() {
+    if output.stdout.is_empty() {
         return Err("The download did not contain the rustxt binary.".into());
     }
+    let binary = work.path().join("rustxt");
+    fs::write(&binary, output.stdout).map_err(text)?;
     replace_binary(&binary, target)
 }
 
@@ -203,6 +204,14 @@ fn verify_checksum(file: &Path, sums: &str, name: &str) -> Result<(), String> {
         .next()
         .unwrap_or_default()
         .to_ascii_lowercase();
+    if !output.status.success()
+        || expected.len() != 64
+        || !expected.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
+        return Err(format!(
+            "{CHECKSUMS} contains an invalid checksum for {name}."
+        ));
+    }
     if actual != expected {
         return Err("The download did not match its checksum, so it was not installed.".into());
     }
@@ -287,6 +296,8 @@ mod tests {
         assert!(!release("v0.3.0").is_newer_than("0.3.0"));
         assert!(!release("v0.2.9").is_newer_than("0.3.0"));
         assert!(release("v1.0.0").is_newer_than("0.99.0"));
+        assert!(!release("v1.0.0-beta.1").is_newer_than("1.0.0"));
+        assert!(!release("not-a-version").is_newer_than("1.0.0"));
     }
 
     #[test]

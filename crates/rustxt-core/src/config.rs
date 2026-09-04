@@ -145,7 +145,13 @@ impl Paths {
         for dir in [&self.config_dir, &self.data_dir] {
             let old = dir.with_file_name("rustpad");
             if !dir.exists() && old.is_dir() {
-                let _ = std::fs::rename(&old, dir);
+                if let Err(error) = std::fs::rename(&old, dir) {
+                    eprintln!(
+                        "RusTXT: could not migrate {} to {}: {error}",
+                        old.display(),
+                        dir.display()
+                    );
+                }
             }
         }
     }

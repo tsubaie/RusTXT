@@ -21,6 +21,7 @@ gtk = { package = "gtk4", version = "0.11", features = ["v4_16"] }
 adw = { package = "libadwaita", version = "0.9", features = ["v1_6"] }
 sourceview5 = "0.11"
 async-channel = "2"
+tempfile = "3"
 
 [dev-dependencies]
 tempfile = "3"
