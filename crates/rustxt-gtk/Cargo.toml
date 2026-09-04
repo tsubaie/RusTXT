@@ -9,12 +9,21 @@ description.workspace = true
 name = "rustxt"
 path = "src/main.rs"
 
+# The end-to-end test drives the real window in a child process, so it brings
+# its own main instead of the libtest harness. See tests/e2e.rs.
+[[test]]
+name = "e2e"
+harness = false
+
 [dependencies]
 rustxt-core = { path = "../rustxt-core" }
 gtk = { package = "gtk4", version = "0.11", features = ["v4_16"] }
 adw = { package = "libadwaita", version = "0.9", features = ["v1_6"] }
 sourceview5 = "0.11"
 async-channel = "2"
+
+[dev-dependencies]
+tempfile = "3"
 
 # Debian/Ubuntu package (cargo-deb). Paths are relative to this manifest.
 [package.metadata.deb]

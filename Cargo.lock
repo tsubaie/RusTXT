@@ -834,6 +834,7 @@ dependencies = [
  "libadwaita",
  "rustxt-core",
  "sourceview5",
+ "tempfile",
 ]
 
 [[package]]

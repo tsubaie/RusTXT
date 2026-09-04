@@ -1,0 +1,4 @@
+#!/bin/sh
+# Runs the same gates as CI before anything leaves this machine.
+# Installed by `make setup`. Skip once with: git push --no-verify
+cd "$(git rev-parse --show-toplevel)" && exec make check

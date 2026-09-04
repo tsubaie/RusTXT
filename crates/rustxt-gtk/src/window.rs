@@ -476,17 +476,8 @@ impl RustxtWindow {
                     self.refresh_closed();
                     return;
                 };
-                if state.file_path.is_none()
-                    && self.docs.borrow().iter().any(|d| d.title() == state.title)
-                {
-                    let titles: Vec<String> =
-                        self.docs.borrow().iter().map(|d| d.title()).collect();
-                    state.title = DocumentState::untitled(
-                        titles.iter().map(String::as_str),
-                        state.line_ending,
-                    )
-                    .title;
-                }
+                let titles: Vec<String> = self.docs.borrow().iter().map(|d| d.title()).collect();
+                state.ensure_unique_title(titles.iter().map(String::as_str));
                 let existing = state.file_path.as_deref().and_then(|path| {
                     self.docs
                         .borrow()
@@ -523,14 +514,7 @@ impl RustxtWindow {
             menu.append(Some("Nothing to reopen"), Some("win.unavailable"));
         }
         for doc in closed.iter() {
-            // Menu labels treat "_" as a mnemonic marker; show it literally.
-            let title = doc.title.replace('_', "__");
-            let label = if doc.dirty {
-                format!("{title} •")
-            } else {
-                title
-            };
-            let item = gio::MenuItem::new(Some(&label), None);
+            let item = gio::MenuItem::new(Some(&doc.menu_label()), None);
             item.set_action_and_target_value(Some("win.reopen"), Some(&doc.id.to_variant()));
             menu.append_item(&item);
         }

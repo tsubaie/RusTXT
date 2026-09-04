@@ -282,3 +282,82 @@ fn parse_hex(color: &str) -> Option<(u8, u8, u8)> {
     let channel = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
     Some((channel(0)?, channel(2)?, channel(4)?))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_font_uses_monospace_with_arabic_fallback_and_zoom() {
+        let css = editor_font_css("", 200);
+        assert!(
+            css.contains("font-family: monospace, \"Noto Naskh Arabic\""),
+            "{css}"
+        );
+        assert!(css.contains("font-size: 30.0px"), "{css}");
+    }
+
+    #[test]
+    fn single_family_gets_arabic_fallback_and_points_become_pixels() {
+        let css = editor_font_css("JetBrains Mono Bold Italic 12", 100);
+        assert!(
+            css.contains("font-family: \"JetBrains Mono\", \"Noto Naskh Arabic\";"),
+            "{css}"
+        );
+        assert!(css.contains("font-size: 16.0px;"), "{css}");
+        assert!(css.contains("font-weight: 700;"), "{css}");
+        assert!(css.contains("font-style: italic;"), "{css}");
+    }
+
+    #[test]
+    fn two_families_are_kept_as_written() {
+        let css = editor_font_css("Fira Code, Amiri 10", 100);
+        assert!(css.contains("\"Fira Code\", \"Amiri\""), "{css}");
+        assert!(!css.contains(ARABIC_FONT), "{css}");
+    }
+
+    fn palette(dark: bool) -> Palette {
+        Palette {
+            mode: if dark { "dark" } else { "light" }.into(),
+            background: "#101010".into(),
+            foreground: "#f0f0f0".into(),
+            chrome: None,
+            muted: None,
+            accent: None,
+            selection: None,
+            border: None,
+            menu: None,
+        }
+    }
+
+    #[test]
+    fn palette_css_derives_chrome_menu_and_accent_when_unset() {
+        let dark = palette_css(&palette(true), true);
+        assert!(dark.contains("--view-bg-color: #101010;"), "{dark}");
+        assert!(
+            dark.contains("color-mix(in srgb, #101010 82%, black)"),
+            "{dark}"
+        );
+        assert!(dark.contains("--accent-bg-color: #4cc2ff;"), "{dark}");
+        assert!(
+            dark.contains("--accent-fg-color: #101010;"),
+            "dark accents use the background as text color: {dark}"
+        );
+        let light = palette_css(&palette(false), false);
+        assert!(light.contains("#101010 95%, black"), "{light}");
+        assert!(light.contains("--accent-bg-color: #005fb8;"), "{light}");
+        assert!(light.contains("--accent-fg-color: #ffffff;"), "{light}");
+    }
+
+    #[test]
+    fn explicit_palette_colors_win() {
+        let mut custom = palette(true);
+        custom.accent = Some("#ff8800".into());
+        custom.chrome = Some("#000000".into());
+        custom.menu = Some("#222222".into());
+        let css = palette_css(&custom, true);
+        assert!(css.contains("--accent-color: #ff8800;"), "{css}");
+        assert!(css.contains("--window-bg-color: #000000;"), "{css}");
+        assert!(css.contains("--popover-bg-color: #222222;"), "{css}");
+    }
+}
