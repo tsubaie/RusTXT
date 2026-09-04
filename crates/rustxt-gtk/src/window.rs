@@ -96,6 +96,7 @@ pub struct RustxtWindow {
     restoring: Cell<bool>,
     wheel_accumulator: Cell<f64>,
     _watcher: RefCell<Option<ConfigWatcher>>,
+    _emergency_storage: Option<tempfile::TempDir>,
 }
 
 impl RustxtWindow {
@@ -118,11 +119,19 @@ impl RustxtWindow {
         if let Err(error) = config::ensure_config_file(&paths) {
             eprintln!("RusTXT: could not write default config: {error}");
         }
-        let storage = Storage::open(&paths.session_db()).unwrap_or_else(|error| {
-            eprintln!("RusTXT: recovery database unavailable ({error}); using a temporary one");
-            Storage::open(&std::env::temp_dir().join("rustxt-session.db"))
-                .expect("cannot open a recovery database anywhere")
-        });
+        let (storage, emergency_storage) = match Storage::open(&paths.session_db()) {
+            Ok(storage) => (storage, None),
+            Err(error) => {
+                eprintln!("RusTXT: recovery database unavailable ({error}); using a private temporary one");
+                let directory = tempfile::Builder::new()
+                    .prefix("rustxt-")
+                    .tempdir()
+                    .expect("cannot create private temporary recovery directory");
+                let storage = Storage::open(&directory.path().join("session.db"))
+                    .expect("cannot open a recovery database anywhere");
+                (storage, Some(directory))
+            }
+        };
         let settings = config::settings(&paths);
 
         // --- widgets -----------------------------------------------------------
@@ -208,6 +217,7 @@ impl RustxtWindow {
             restoring: Cell::new(false),
             wheel_accumulator: Cell::new(0.0),
             _watcher: RefCell::new(None),
+            _emergency_storage: emergency_storage,
         });
 
         this.install_actions();
@@ -307,7 +317,10 @@ impl RustxtWindow {
             .docs
             .borrow()
             .iter()
-            .find(|d| d.file_path().as_deref() == Some(&path_text))
+            .find(|d| {
+                d.file_path()
+                    .is_some_and(|open| files::same_file(Path::new(&open), path))
+            })
             .cloned();
         if let Some(doc) = existing {
             self.tab_view.set_selected_page(&doc.page);
@@ -366,6 +379,27 @@ impl RustxtWindow {
 
     fn write_document(&self, doc: &Rc<Document>, path: &Path) {
         let mut state = doc.snapshot();
+        let saving_over_original = state
+            .file_path
+            .as_deref()
+            .is_some_and(|original| files::same_file(Path::new(original), path));
+        if saving_over_original {
+            match files::changed_on_disk(&state, path) {
+                Ok(true) => {
+                    self.show_error(
+                        "This file changed on disk after RusTXT loaded it. To protect those changes, reload the file or use Save As.",
+                    );
+                    return;
+                }
+                Err(error) => {
+                    self.show_error(&format!(
+                        "The original file is no longer available ({error}). Use Save As to keep this text."
+                    ));
+                    return;
+                }
+                Ok(false) => {}
+            }
+        }
         if let Err(error) = files::save_document(&mut state, path) {
             self.show_error(&error);
             return;

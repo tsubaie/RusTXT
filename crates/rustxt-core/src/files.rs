@@ -1,11 +1,33 @@
 //! Reading and atomically writing documents on disk. Tauri-free.
 
 use crate::storage::{DocumentState, LineEnding};
+use sha2::{Digest, Sha256};
 use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
 };
+
+pub fn content_fingerprint(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+pub fn disk_fingerprint(path: &Path) -> Result<String, String> {
+    fs::read(path)
+        .map(|bytes| content_fingerprint(&bytes))
+        .map_err(|error| format!("Could not inspect file: {error}"))
+}
+
+pub fn changed_on_disk(state: &DocumentState, path: &Path) -> Result<bool, String> {
+    disk_fingerprint(path).map(|current| state.disk_fingerprint.as_deref() != Some(&current))
+}
+
+pub fn same_file(left: &Path, right: &Path) -> bool {
+    matches!(
+        (fs::canonicalize(left), fs::canonicalize(right)),
+        (Ok(left), Ok(right)) if left == right
+    )
+}
 
 pub fn title_for(path: &Path) -> String {
     path.file_name()
@@ -28,12 +50,15 @@ pub fn encode(content: &str, line_ending: LineEnding) -> String {
 }
 
 pub fn read_document(path: &str) -> Result<DocumentState, String> {
-    let raw = fs::read_to_string(path).map_err(|error| format!("Could not open file: {error}"))?;
+    let bytes = fs::read(path).map_err(|error| format!("Could not open file: {error}"))?;
+    let disk_fingerprint = Some(content_fingerprint(&bytes));
+    let raw = String::from_utf8(bytes).map_err(|error| format!("Could not open file: {error}"))?;
     Ok(DocumentState {
         id: uuid::Uuid::new_v4().to_string(),
         title: title_for(Path::new(path)),
         file_path: Some(path.to_string()),
         line_ending: LineEnding::detect(&raw),
+        disk_fingerprint,
         content: normalize(&raw),
         dirty: false,
         cursor_offset: 0,
@@ -49,6 +74,7 @@ pub fn save_document(state: &mut DocumentState, path: &Path) -> Result<(), Strin
     atomic_save(path, bytes.as_bytes())?;
     state.title = title_for(path);
     state.file_path = Some(path.to_string_lossy().into_owned());
+    state.disk_fingerprint = Some(content_fingerprint(bytes.as_bytes()));
     state.dirty = false;
     Ok(())
 }
@@ -70,6 +96,7 @@ pub fn refresh_from_disk(documents: &mut Vec<DocumentState>) {
             Ok(raw) => {
                 document.line_ending = LineEnding::detect(&raw);
                 document.content = normalize(&raw);
+                document.disk_fingerprint = Some(content_fingerprint(raw.as_bytes()));
                 true
             }
             Err(_) if document.content.is_empty() => false,
@@ -104,6 +131,11 @@ pub fn atomic_save(path: &Path, content: &[u8]) -> Result<(), String> {
     temporary
         .persist(&target)
         .map_err(|e| e.error.to_string())?;
+    // Make the rename durable as well as atomic. Without syncing the directory,
+    // a power loss can forget the new directory entry even after the file sync.
+    fs::File::open(parent)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -169,6 +201,29 @@ mod tests {
     }
 
     #[test]
+    fn equivalent_paths_identify_the_same_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("note.txt");
+        fs::write(&path, "hello").unwrap();
+        assert!(same_file(&path, &dir.path().join("./note.txt")));
+        assert!(!same_file(
+            &dir.path().join("missing-a"),
+            &dir.path().join("missing-b")
+        ));
+    }
+
+    #[test]
+    fn detects_a_file_changed_after_it_was_loaded() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("note.txt");
+        fs::write(&path, "original").unwrap();
+        let state = read_document(path.to_str().unwrap()).unwrap();
+        assert!(!changed_on_disk(&state, &path).unwrap());
+        fs::write(&path, "external edit").unwrap();
+        assert!(changed_on_disk(&state, &path).unwrap());
+    }
+
+    #[test]
     fn save_document_encodes_line_endings_and_updates_state() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("notes.txt");
@@ -208,6 +263,7 @@ mod tests {
             scroll_top: 0.0,
             tab_position: 0,
             line_ending: LineEnding::Lf,
+            disk_fingerprint: None,
         };
         let mut docs = vec![
             base("clean", &present, false),

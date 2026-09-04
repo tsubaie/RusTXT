@@ -66,6 +66,10 @@ pub struct DocumentState {
     pub tab_position: i64,
     #[serde(default)]
     pub line_ending: LineEnding,
+    /// Fingerprint of the file version this buffer was loaded from. Used to
+    /// refuse saves that would overwrite an external change, including after recovery.
+    #[serde(default)]
+    pub disk_fingerprint: Option<String>,
 }
 
 impl DocumentState {
@@ -89,6 +93,7 @@ impl DocumentState {
             scroll_top: 0.0,
             tab_position: 0,
             line_ending,
+            disk_fingerprint: None,
         }
     }
 
@@ -165,12 +170,13 @@ const SCHEMA: &str = "
         updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
         closed_at INTEGER,
         line_ending TEXT NOT NULL DEFAULT 'LF'
+        , disk_fingerprint TEXT
     );
     CREATE TABLE IF NOT EXISTS app_state (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 ";
 
 const DOCUMENT_COLUMNS: &str =
-    "id, file_path, title, content, dirty, cursor_offset, scroll_top, tab_position, line_ending";
+    "id, file_path, title, content, dirty, cursor_offset, scroll_top, tab_position, line_ending, disk_fingerprint";
 
 fn text(error: impl ToString) -> String {
     error.to_string()
@@ -188,6 +194,7 @@ fn read_document(row: &Row) -> rusqlite::Result<DocumentState> {
         scroll_top: row.get(6)?,
         tab_position: row.get(7)?,
         line_ending: LineEnding::parse(&line_ending),
+        disk_fingerprint: row.get(9)?,
     })
 }
 
@@ -208,6 +215,7 @@ impl Storage {
         // Databases created by earlier versions predate these columns.
         ensure_column(&connection, "closed_at", "INTEGER")?;
         ensure_column(&connection, "line_ending", "TEXT NOT NULL DEFAULT 'LF'")?;
+        ensure_column(&connection, "disk_fingerprint", "TEXT")?;
         Ok(Self { connection })
     }
 
@@ -223,13 +231,14 @@ impl Storage {
         self.connection
             .execute(
                 "INSERT INTO documents (id, file_path, title, content, dirty, cursor_offset, scroll_top,
-                                        tab_position, line_ending, is_open, closed_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 1, NULL, unixepoch())
+                                        tab_position, line_ending, disk_fingerprint, is_open, closed_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1, NULL, unixepoch())
                  ON CONFLICT(id) DO UPDATE SET
                     file_path = excluded.file_path, title = excluded.title, content = excluded.content,
                     dirty = excluded.dirty, cursor_offset = excluded.cursor_offset,
                     scroll_top = excluded.scroll_top, tab_position = excluded.tab_position,
-                    line_ending = excluded.line_ending, is_open = 1, closed_at = NULL,
+                    line_ending = excluded.line_ending, disk_fingerprint = excluded.disk_fingerprint,
+                    is_open = 1, closed_at = NULL,
                     updated_at = unixepoch()",
                 params![
                     document.id,
@@ -241,6 +250,7 @@ impl Storage {
                     document.scroll_top,
                     document.tab_position,
                     document.line_ending.as_str(),
+                    document.disk_fingerprint,
                 ],
             )
             .map(drop)
@@ -466,6 +476,7 @@ mod tests {
             scroll_top: 2.0,
             tab_position: position,
             line_ending: LineEnding::Lf,
+            disk_fingerprint: None,
         }
     }
 
