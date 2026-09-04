@@ -8,4 +8,5 @@ pub mod config;
 pub mod desktop;
 pub mod files;
 pub mod storage;
+pub mod update;
 pub mod watch;

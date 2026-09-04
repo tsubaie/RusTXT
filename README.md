@@ -73,6 +73,7 @@ It's Rust. It opens, it saves, it stays out of your way. That's it.
 ### 🖥️ Fits your desktop
 
 - **One Settings menu.** Theme, title bar, zoom, font, word wrap, status bar, and *About RusTXT*. `Ctrl+,` opens it. That is the whole list.
+- **Updates on your terms.** *About RusTXT* has a *Check for updates* button and does nothing until you press it. Installed per user from the tarball or the quick installer, it downloads the new build, verifies it, and swaps it in; installed from a package, it tells you the update will come through your package manager.
 - **Follows your desktop.** On [Omarchy](https://omarchy.org) it picks up the active theme's colors automatically and re-themes the moment you run `omarchy theme set`. Light, dark, system, or your own palette otherwise. On tiling compositors the redundant title bar disappears; on GNOME and macOS it stays.
 - **Open from the terminal.** `rustxt notes.txt todo.md`. A second launch hands its files to the running window.
 
