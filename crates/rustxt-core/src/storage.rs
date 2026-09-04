@@ -91,6 +91,19 @@ impl DocumentState {
             line_ending,
         }
     }
+
+    /// Give an untitled document a fresh "Untitled N" when its title is
+    /// already in use, as happens when a closed note is reopened next to a
+    /// tab that inherited its number. Files keep their name.
+    pub fn ensure_unique_title<'a>(&mut self, existing_titles: impl Iterator<Item = &'a str>) {
+        if self.file_path.is_some() {
+            return;
+        }
+        let titles: Vec<&str> = existing_titles.collect();
+        if titles.contains(&self.title.as_str()) {
+            self.title = Self::untitled(titles.into_iter(), self.line_ending).title;
+        }
+    }
 }
 
 /// The label a closed note gets in the Recently closed menu: its first
@@ -115,6 +128,20 @@ pub struct ClosedDocument {
     pub file_path: Option<String>,
     pub dirty: bool,
     pub closed_at: i64,
+}
+
+impl ClosedDocument {
+    /// Text for the Recently closed menu entry: the title, an unsaved
+    /// marker when there is text not on disk, and underscores doubled
+    /// because GTK menu labels read a single underscore as a mnemonic.
+    pub fn menu_label(&self) -> String {
+        let title = self.title.replace('_', "__");
+        if self.dirty {
+            format!("{title} \u{2022}")
+        } else {
+            title
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -457,6 +484,36 @@ mod tests {
             DocumentState::untitled(std::iter::empty(), LineEnding::Lf).title,
             "Untitled 1"
         );
+    }
+
+    #[test]
+    fn reopened_note_takes_a_free_number_only_when_its_title_is_taken() {
+        let mut note = document("n", 0);
+        note.title = "Untitled 1".into();
+        note.ensure_unique_title(["Untitled 1", "Untitled 2"].into_iter());
+        assert_eq!(note.title, "Untitled 3");
+        note.ensure_unique_title(["Untitled 1"].into_iter());
+        assert_eq!(note.title, "Untitled 3", "a free title is left alone");
+        let mut file = saved_file("f", 0);
+        file.ensure_unique_title(["f.txt"].into_iter());
+        assert_eq!(file.title, "f.txt", "files keep their name");
+    }
+
+    #[test]
+    fn menu_label_marks_unsaved_text_and_escapes_mnemonics() {
+        let closed = ClosedDocument {
+            id: "x".into(),
+            title: "my_notes".into(),
+            file_path: None,
+            dirty: true,
+            closed_at: 0,
+        };
+        assert_eq!(closed.menu_label(), "my__notes \u{2022}");
+        let clean = ClosedDocument {
+            dirty: false,
+            ..closed
+        };
+        assert_eq!(clean.menu_label(), "my__notes");
     }
 
     #[test]

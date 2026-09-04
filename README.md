@@ -204,7 +204,8 @@ data/                 desktop entry, icon, and the logo at the top of this page.
 - Saves go through a temporary file and an atomic rename, keep the original permissions, and write through symlinks.
 
 ```bash
-cargo test -p rustxt-core      # core unit tests
+make setup                      # once per clone: installs the pre-push hook
+make check                      # format, clippy, tests: the same gates as CI
 cargo build --release           # optimized binary with LTO
 ```
 
