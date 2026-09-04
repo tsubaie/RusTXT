@@ -24,8 +24,9 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:base-devel
     steps:
-      - name: Install toolchain and GTK
-        run: pacman -Syu --noconfirm rust gtk4 libadwaita gtksourceview5 git
+      # Xvfb and a font give the end-to-end tests a display to open windows on.
+      - name: Install toolchain, GTK and a headless display
+        run: pacman -Syu --noconfirm rust gtk4 libadwaita gtksourceview5 git xorg-server-xvfb ttf-dejavu
       - uses: actions/checkout@v4
       # Shared with the release workflow's Arch job: same image, same compiler.
       - name: Cache cargo registry and build output
@@ -38,6 +39,9 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Tests
-        run: cargo test --workspace --locked
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" cargo test --workspace --locked
+        env:
+          GDK_BACKEND: x11
+          GSK_RENDERER: cairo
       - name: Release build
         run: cargo build --release --locked -p rustxt

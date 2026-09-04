@@ -195,6 +195,8 @@ Menus open with `Alt+F`, `Alt+E`, `Alt+V`, `Alt+S`, or `F10`. *About RusTXT* liv
 ```
 crates/rustxt-core   documents, recovery storage, config, themes. No GTK. Unit tested on its own.
 crates/rustxt-gtk    the application: window, tabs, find bar, menus, settings, about, printing.
+                      tests/e2e.rs runs the real window in a sandboxed child process, kills it
+                      mid-edit and checks the next launch brings the text back.
 data/                 desktop entry, icon, and the logo at the top of this page.
 ```
 

@@ -1,6 +1,6 @@
 # Development gates. Run `make setup` once per clone to install the pre-push
 # hook; from then on every push runs `make check`, the same steps CI runs.
-.PHONY: check fmt-check fmt clippy test build run setup
+.PHONY: check fmt-check fmt clippy test e2e build run setup
 
 check: fmt-check clippy test
 
@@ -15,6 +15,10 @@ clippy:
 
 test:
 	cargo test --workspace --locked
+
+# The end-to-end tests alone. They open real windows, so they need a display.
+e2e:
+	cargo test -p rustxt --locked --test e2e
 
 build:
 	cargo build --release --locked -p rustxt
