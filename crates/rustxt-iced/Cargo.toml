@@ -58,12 +58,13 @@ assets = [
 
 # These libraries are loaded dynamically, so automatic ELF scanning misses them.
 [package.metadata.generate-rpm.requires]
-libxkbcommon = "*"
-libxkbcommon-x11 = "*"
-wayland-libs = "*"
-libX11 = "*"
-libXcursor = "*"
-libXi = "*"
+"libxkbcommon.so.0()(64bit)" = "*"
+"libxkbcommon-x11.so.0()(64bit)" = "*"
+"libwayland-client.so.0()(64bit)" = "*"
+"libX11.so.6()(64bit)" = "*"
+"libX11-xcb.so.1()(64bit)" = "*"
+"libXcursor.so.1()(64bit)" = "*"
+"libXi.so.6()(64bit)" = "*"
 fontconfig = "*"
 
 [package.metadata.generate-rpm.recommends]
