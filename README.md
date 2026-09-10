@@ -18,7 +18,7 @@ Get the packages from [the latest release](https://github.com/tsubaie/RusTXT/rel
 | Arch / Omarchy | `sudo pacman -U rustxt-*.pkg.tar.zst` |
 | Debian 13+ | `sudo apt install ./rustxt_*_amd64.deb` |
 | Fedora 42+ | `sudo dnf install ./rustxt-*.x86_64.rpm` |
-| Windows x86_64 | Extract the Windows ZIP and run `rustxt.exe`. No installer required. |
+| Windows x86_64 | Extract the Windows ZIP and run `rustxt.exe`. No installer or Visual C++ redistributable required. |
 | macOS Apple Silicon | Extract `arm64-macos.zip` and move RusTXT.app to Applications. |
 | macOS Intel | Extract `x86_64-macos.zip` and move RusTXT.app to Applications. |
 

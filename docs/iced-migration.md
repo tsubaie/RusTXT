@@ -46,7 +46,8 @@ or total system memory including the display server/desktop portal.
 Raw results, including binary SHA-256 hashes:
 [GTK](benchmarks/gtk-linux.json) and [Iced](benchmarks/iced-linux.json).
 The preserved GTK executable is in `target/footprint/rustxt-gtk` in this workspace;
-the current executable is `target/release/rustxt-iced`; its follow-up measurements are below.
+the workspace executable is `target/release/rustxt-iced`. The follow-up below
+records a specific renderer-fix snapshot, not every subsequent release build.
 
 To repeat on Linux:
 
@@ -113,23 +114,32 @@ checksum-corruption fixture was corrected so the replacement digit always differ
   recovered undo history, tabs, closing/reopening notes, find selection/replacement,
   Arabic/English rendering, file forwarding, CRLF saves, external-change protection,
   settings, scroll recovery, and clean exit.
-- Windows and macOS build/test/artifact jobs are configured in
-  `.github/workflows/iced.yml`; they have not been run in this local session.
-  Platform smoke testing, IME/accessibility testing, and macOS signing/notarization
-  remain release qualification work.
+- Native CI validates Linux, Windows, Apple Silicon macOS, and Intel macOS with
+  formatting, Clippy, core/editor tests, renderer regressions, and release builds.
+  Native startup smoke tests load Unicode filenames, forward a second launch into
+  the first instance, and restore the session after terminating the process.
+- Arch, Debian 13, and Fedora 42 packages are installed in clean containers and
+  pass the same startup/forwarding/recovery check. Runtime-loaded X11/Wayland
+  libraries are explicitly declared because ELF dependency scanning misses them.
+- macOS bundles are ad-hoc signed and verified, but not Apple-notarized. Windows
+  ZIPs include the C runtime. IME and accessibility behavior still require manual
+  platform validation.
 - Native file dialogs require the desktop portal on Linux. The automated Xvfb
   tests cover file opening through command-line forwarding and existing-file saves;
   they do not exercise the system file picker or physical printing.
 - Printing opens a local HTML print view in the default browser. The GTK-native
   print compositor is not carried over.
 - The About dialog opens the release page. Automatic executable replacement is
-  not enabled for this development frontend, so it cannot install a GTK release
-  over itself.
+  not enabled for the Iced frontend.
 - Menus are drawn inside the application; macOS global menu integration and Finder
   document-open events are not implemented. Opening via the CLI, in-app dialog,
   and file drop is supported.
 - Existing GTK and Iced processes must not edit the same recovery database at the
   same time. The Iced instance lock coordinates Iced processes; older GTK builds
   do not participate in it.
+
+The release qualification run is recorded in
+[the cross-platform package workflow](https://github.com/tsubaie/RusTXT/actions/runs/34477781286)
+and [the lint/test matrix](https://github.com/tsubaie/RusTXT/actions/runs/34477781159).
 
 Screenshots: [editor](screenshots/iced-editor.png), [settings](screenshots/iced-settings.png).
