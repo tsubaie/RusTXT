@@ -1,6 +1,7 @@
 """Exercise native startup, file forwarding and recovery with isolated data."""
 import os
 import hashlib
+from contextlib import closing
 from pathlib import Path
 import sqlite3
 import subprocess
@@ -49,7 +50,7 @@ with tempfile.TemporaryDirectory(prefix='rustxt-startup-') as directory:
                     raise AssertionError(f'Native app exited early ({process.returncode}): {log.read()}')
                 if database.exists():
                     try:
-                        with sqlite3.connect(database) as db:
+                        with closing(sqlite3.connect(database)) as db:
                             actual = dict(db.execute('SELECT file_path, disk_fingerprint FROM documents WHERE is_open = 1'))
                         if all(actual.get(str(path)) == hashlib.sha256(text.encode('utf-8')).hexdigest() for path, text in expected.items()):
                             return
