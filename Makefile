@@ -11,20 +11,23 @@ fmt:
 	cargo fmt --all
 
 clippy:
-	cargo clippy --workspace --all-targets --locked -- -D warnings
+	cargo clippy -p rustxt-core -p rustxt-iced --all-targets --locked -- -D warnings
 
 test:
-	cargo test --workspace --locked
+	cargo test -p rustxt-core -p rustxt-iced --locked
 
 # The end-to-end tests alone. They open real windows, so they need a display.
-e2e:
+e2e: build
+	xvfb-run -a -s '-screen 0 1280x1024x24' python3 tools/iced-e2e.py target/release/rustxt-iced target/iced-e2e
+
+legacy-e2e:
 	cargo test -p rustxt --locked --test e2e
 
 build:
-	cargo build --release --locked -p rustxt
+	cargo build --release --locked -p rustxt-iced
 
 run:
-	cargo run -p rustxt
+	cargo run -p rustxt-iced
 
 setup:
 	git config core.hooksPath .githooks

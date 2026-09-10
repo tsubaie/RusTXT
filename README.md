@@ -1,228 +1,93 @@
-<p align="center">
-  <img src="data/icons/com.tsubaie.rustxt.png" alt="RusTXT" width="300">
-</p>
+<p align="center"><img src="data/icons/com.tsubaie.rustxt.png" alt="RusTXT" width="180"></p>
 
-<p align="center">
-  <strong>Dead simple. No BS. It never loses your text.</strong><br>
-  A plain text editor for Linux and macOS that opens instantly, remembers everything, and stays out of your way.<br>
-  <sub>No plugins. No AI sidebar. No account. No "What's new" popup. Just a place to type.</sub>
-</p>
+# RusTXT
 
-<p align="center">
-  <img alt="Rust" src="https://img.shields.io/badge/Rust-2021-orange?logo=rust&logoColor=white">
-  <img alt="GTK 4" src="https://img.shields.io/badge/GTK-4-4a86cf?logo=gtk&logoColor=white">
-  <img alt="libadwaita" src="https://img.shields.io/badge/libadwaita-1.6%2B-7c4dff">
-  <img alt="Platforms" src="https://img.shields.io/badge/Linux%20%7C%20macOS-native-2ea44f">
-</p>
+A small, recoverable plain text editor built with Rust and Iced for Linux,
+Windows, and macOS.
 
-<p align="center">
-  <img src="docs/screenshots/editor-dark.png" alt="RusTXT editing a note, dark theme" width="880">
-</p>
+This branch migrates the interface from GTK to Iced. `cargo run` and `make run`
+start the Iced frontend. The GTK frontend remains available for comparison with
+`cargo run -p rustxt`; the published 0.4.x packages still contain GTK.
 
----
+![Iced editor with Arabic and English](docs/screenshots/iced-editor.png)
 
-## 🦀 Why RusTXT
+## Features
 
-It's Rust. It opens, it saves, it stays out of your way. That's it.
+- Tabs, keyboard shortcuts, file drag and drop, and single-instance file forwarding.
+- SQLite recovery snapshots every 250 ms while editing, including unsaved notes.
+- Undo/redo history and cursor/scroll positions restored across restarts.
+- Close a tab and reopen it with Ctrl+Shift+T. Permanent discard requires confirmation.
+- Find and replace with match counting, case sensitivity, whole words, and regex captures.
+- Atomic file saves, external-change protection, symlink handling, and CRLF preservation.
+- Arabic/English editing, Unicode font fallback, word wrap, zoom, and a status bar.
+- System, light, dark, Omarchy, and custom themes; live configuration reloads.
+- Native file dialogs. Printing opens a local print view in the default browser.
 
-⚡ **Opens instantly.** A real native app, not a browser in a box. Around 4 MB on disk, and it is on screen before you finish reaching for the keyboard. Your thought is still fresh when the cursor starts blinking.
+The interface uses in-window menus. On macOS, command shortcuts use Cmd; tab
+cycling uses Ctrl+Tab. The About dialog links to the latest release rather than
+replacing the running executable with an older GTK release.
 
-🛟 **Never loses your work.** Every keystroke is saved to disk within half a second. Close the window, kill the process, pull the plug, let the laptop die at 1%. Open RusTXT again and every tab, every unsaved line, and even your cursor position are exactly where you left them. It has never once asked "Do you want to save changes?" and it never will.
+## Build and run
 
-🧠 **Nothing to learn.** Tabs, a menu bar, find and replace, a status bar. The same conventions and shortcuts you already know from every text editor you have ever used. There is no tutorial because there is nothing to tutor.
+Use a current stable Rust toolchain:
 
-✅ **Just works.** Files are saved atomically, permissions are kept, symlinks are respected, and CRLF or LF line endings are preserved exactly as they were. Your text files stay ordinary text files, readable by anything, including your future self with a different editor.
-
-## 📸 Screenshots
-
-<table>
-  <tr>
-    <td align="center"><img src="docs/screenshots/find-replace.png" alt="Find and replace" width="440"><br><sub>Find and replace floats over the text and gets out of the way</sub></td>
-    <td align="center"><img src="docs/screenshots/file-menu.png" alt="File menu" width="440"><br><sub>Real menus with real shortcuts, recently closed tabs included</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/screenshots/settings.png" alt="Settings" width="440"><br><sub>Settings: theme, title bar, zoom, font, word wrap, status bar. That is all of them</sub></td>
-    <td align="center"><img src="docs/screenshots/editor-light.png" alt="Light theme" width="440"><br><sub>Light, dark, system, or your Omarchy theme, switched live</sub></td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center"><img src="docs/screenshots/rtl-arabic.png" alt="Arabic right-to-left text next to English" width="880"><br><sub>Right-to-left text just works: Arabic and English in the same document, each aligned the right way</sub></td>
-  </tr>
-</table>
-
-## ✨ Features
-
-### 📝 Editing
-
-- **Tabs that remember.** Each tab keeps its own undo history, cursor, and scroll position across restarts.
-- **Find and replace** with match counting, match case, whole word, and regular expressions. `Ctrl+F`, `Ctrl+H`, `F3`, `Shift+F3`. Go to line with `Ctrl+G`.
-- **Zoom** with `Ctrl` + wheel, `Ctrl+Plus`, `Ctrl+Minus`, `Ctrl+0`. Word wrap and status bar toggles in the *View* menu.
-- **Native printing** through the system print dialog. Time and date stamp with `F5`.
-- **Line endings preserved.** Opens `CRLF` files and saves them back as `CRLF`. The status bar tells you which.
-
-### 🛟 Recovery
-
-- **Every keystroke is saved** to a recovery store within half a second. Crash, power cut, or a plain close: reopen and everything is back, including unsaved tabs.
-- **Close for now, or discard for good.** Closing a tab keeps its recovery copy, and closing the last tab closes RusTXT. *File ▸ Recently closed* or `Ctrl+Shift+T` brings it back, listed by its first line. Notes with unsaved text are kept for good; only the twenty most recently closed saved files are remembered, since those live on disk anyway. *Discard changes and close* is the only way to lose text, and it asks first.
-- **Files are saved safely.** A temporary file and an atomic rename, original permissions kept, symlinks written through.
-
-### 🌍 Scripts and fonts
-
-- **Right-to-left text just works.** Arabic, Hebrew and Persian lines flow and align the way they should.
-- **Arabic looks right out of the box.** It is set in Noto Naskh Arabic next to whatever monospace font you use for everything else. Pick any font in Settings and the pairing follows.
-
-### 🖥️ Fits your desktop
-
-- **One Settings menu.** Theme, title bar, zoom, font, word wrap, status bar, and *About RusTXT*. `Ctrl+,` opens it. That is the whole list.
-- **Updates on your terms.** *About RusTXT* has a *Check for updates* button and does nothing until you press it. Installed per user from the tarball or the quick installer, it downloads the new build, verifies it, and swaps it in; installed from a package, it tells you the update will come through your package manager.
-- **Follows your desktop.** On [Omarchy](https://omarchy.org) it picks up the active theme's colors automatically and re-themes the moment you run `omarchy theme set`. Light, dark, system, or your own palette otherwise. On tiling compositors the redundant title bar disappears; on GNOME and macOS it stays.
-- **Open from the terminal.** `rustxt notes.txt todo.md`. A second launch hands its files to the running window.
-
-## 📦 Install
-
-### Quick install
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/tsubaie/RusTXT/main/install.sh | sh
+```sh
+cargo run --release -p rustxt-iced
+cargo run --release -p rustxt-iced -- notes.txt
 ```
 
-Linux on x86_64. It fetches the latest release for your distro, checks it against the release's `SHA256SUMS`, and installs it with pacman, apt or dnf. On any other Linux it unpacks the tarball into `~/.local`. It compiles nothing, and [the script](install.sh) is short enough to read first.
+Linux needs the usual X11/Wayland and keyboard libraries. On Debian/Ubuntu:
 
-### Download a package
-
-Grab the latest build from the [Releases page](https://github.com/tsubaie/RusTXT/releases/latest):
-
-| Distro | File | Install |
-|---|---|---|
-| Arch Linux / Omarchy | `rustxt-*.pkg.tar.zst` | `sudo pacman -U rustxt-*.pkg.tar.zst` |
-| Debian 13+ / Ubuntu 25.04+ | `rustxt_*_amd64.deb` | `sudo apt install ./rustxt_*_amd64.deb` |
-| Fedora 42+ | `rustxt-*.x86_64.rpm` | `sudo dnf install ./rustxt-*.x86_64.rpm` |
-| Any Linux | `rustxt-*-x86_64-linux.tar.gz` | extract, then `./install.sh` |
-
-RusTXT needs GTK 4.16, libadwaita 1.6 and GtkSourceView 5 or newer, which rules out Debian 12 and Ubuntu 24.04. Every release ships a `SHA256SUMS` file.
-
-### Build from source
-
-**Arch Linux / Omarchy**
-
-```bash
-omarchy pkg add gtk4 libadwaita gtksourceview5      # or: sudo pacman -S gtk4 libadwaita gtksourceview5
-cargo install --path crates/rustxt-gtk
+```sh
+sudo apt install build-essential pkg-config libxkbcommon-dev libwayland-dev libfontconfig1-dev libx11-dev libxrandr-dev libxi-dev
 ```
 
-**Debian / Ubuntu**
+File dialogs on Linux use the desktop's XDG portal. No GTK, libadwaita,
+GtkSourceView, GPU, or browser runtime is required for the editor itself.
+The renderer is Iced's CPU-based `tiny-skia` backend.
 
-```bash
-sudo apt install libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev
-cargo install --path crates/rustxt-gtk
+Windows uses the MSVC Rust toolchain and Visual Studio C++ build tools. macOS
+uses the Rust toolchain and Xcode command-line tools. The `Iced cross-platform`
+workflow tests/builds all three platforms and produces a Linux tarball, a Windows
+portable ZIP, and a macOS application bundle. These are development artifacts;
+the macOS bundle is ad-hoc signed, not notarized.
+
+## Existing notes and settings
+
+Iced reads the same SQLite recovery database and TOML configuration as GTK.
+Close GTK before opening Iced against the same session. To try a separate session:
+
+```sh
+RUSTXT_DATA_DIR=/tmp/rustxt-iced-review cargo run --release -p rustxt-iced
 ```
 
-**Fedora**
+This changes the recovery location; appearance settings still use the normal
+configuration directory. Linux and macOS retain the existing XDG/HOME layout:
+`~/.config/rustxt/config.toml` and `~/.local/share/rustxt/session.db`. Windows uses
+`%APPDATA%/rustxt` for configuration and `%LOCALAPPDATA%/rustxt` for recovery.
 
-```bash
-sudo dnf install gtk4-devel libadwaita-devel gtksourceview5-devel
-cargo install --path crates/rustxt-gtk
+Undo history is stored as compact edits with an approximately 8 MiB per-tab
+budget, retaining at least the latest edit. Files remain ordinary UTF-8 text.
+
+## Development
+
+```sh
+make check        # formatting, clippy, core/editor tests
+make build        # target/release/rustxt-iced
+make e2e          # Linux: Xvfb, xdotool, ImageMagick, Python 3
 ```
 
-**macOS**
-
-```bash
-brew install gtk4 libadwaita gtksourceview5
-cargo install --path crates/rustxt-gtk
+```
+crates/rustxt-core   recovery, safe file writes, configuration, themes
+crates/rustxt-iced   the cross-platform frontend
+crates/rustxt-gtk    the previous GTK frontend
+vendor/             pinned Iced editor fixes, documented in vendor/README.md
 ```
 
-Then add the launcher entry and icon (Linux):
+See [migration and footprint report](docs/iced-migration.md) for measurements,
+validation, and platform limits. The previous frontend's documentation is in
+[GTK documentation](docs/gtk.md).
 
-```bash
-install -Dm644 data/com.tsubaie.rustxt.desktop ~/.local/share/applications/com.tsubaie.rustxt.desktop
-install -Dm644 data/icons/com.tsubaie.rustxt.png ~/.local/share/icons/hicolor/512x512/apps/com.tsubaie.rustxt.png
-```
+## License
 
-Or just run it from the source tree with `cargo run -p rustxt`.
-
-## ⚙️ Configuration
-
-There is one file, and you will rarely need it: `~/.config/rustxt/config.toml`. RusTXT writes it with comments on first launch, keeps it in sync with the Settings dialog, and picks up hand edits immediately.
-
-```toml
-[appearance]
-theme = "auto"      # "auto", "system", "light", "dark", "omarchy", or a custom theme name
-zoom = 100          # 10-500
-
-[editor]
-word_wrap = true
-font = ""           # empty = system monospace + Noto Naskh Arabic; or e.g. "JetBrainsMono Nerd Font 12"
-
-[window]
-status_bar = true
-title_bar = "auto"  # "auto", "show", "hide"
-```
-
-### Themes
-
-`auto` follows your Omarchy theme when one is installed and the system light/dark setting otherwise. To make your own, drop a file in `~/.config/rustxt/themes/` and set `theme` to its name:
-
-```toml
-# ~/.config/rustxt/themes/solarized.toml
-mode = "dark"            # "dark" or "light"
-background = "#002b36"
-foreground = "#839496"
-accent = "#b58900"       # optional, as are the rest
-muted = "#586e75"
-selection = "#073642"
-border = "#073642"
-chrome = "#00212b"       # tab strip and window
-menu = "#073642"         # menus and popovers
-```
-
-Palettes drive both the libadwaita widgets and the editor's color scheme, so the whole window follows.
-
-## ⌨️ Keyboard shortcuts
-
-| Action | Shortcut | Action | Shortcut |
-|---|---|---|---|
-| New tab | `Ctrl+N` or `Ctrl+T` | Find | `Ctrl+F` |
-| Open | `Ctrl+O` | Replace | `Ctrl+H` |
-| Save / Save as | `Ctrl+S` / `Ctrl+Shift+S` | Find next / previous | `F3` / `Shift+F3` |
-| Save all | `Ctrl+Alt+S` | Go to line | `Ctrl+G` |
-| Close tab | `Ctrl+W` | Time and date | `F5` |
-| Reopen closed tab | `Ctrl+Shift+T` | Zoom in / out / reset | `Ctrl++` / `Ctrl+-` / `Ctrl+0` |
-| Next / previous tab | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Settings | `Ctrl+,` |
-| Print | `Ctrl+P` | Exit | `Ctrl+Shift+W` |
-
-Menus open with `Alt+F`, `Alt+E`, `Alt+V`, `Alt+S`, or `F10`. *About RusTXT* lives in the Settings menu.
-
-## 🔧 How it is built
-
-```
-crates/rustxt-core   documents, recovery storage, config, themes. No GTK. Unit tested on its own.
-crates/rustxt-gtk    the application: window, tabs, find bar, menus, settings, about, printing.
-                      tests/e2e.rs runs the real window in a sandboxed child process, kills it
-                      mid-edit and checks the next launch brings the text back.
-data/                 desktop entry, icon, and the logo at the top of this page.
-```
-
-- **GTK 4 + libadwaita** through `gtk4-rs`, **GtkSourceView 5** for the editor.
-- **SQLite** (WAL mode) for tabs, unsaved snapshots, cursor and scroll positions, and recently closed tabs. Only the tab you are typing in is written, and only after you pause.
-- **TOML** configuration watched with `notify` so edits and theme changes apply live.
-- Saves go through a temporary file and an atomic rename, keep the original permissions, and write through symlinks.
-
-```bash
-make setup                      # once per clone: installs the pre-push hook
-make check                      # format, clippy, tests: the same gates as CI
-cargo build --release           # optimized binary with LTO
-```
-
-## 🗺️ Roadmap
-
-- Encoding and line-ending controls, external-change detection, recent files.
-- Markdown preview, spellcheck, export.
-- Large-file mode, command palette, a carefully permissioned extension model.
-- Optional, provider-neutral writing tools that run locally or with a provider you configure.
-
-## 🤝 Contributing
-
-Issues and pull requests are welcome. Keep the core toolkit-free and covered by tests, and keep the interface boring in the best way: if a feature needs a manual, it probably does not belong in a plain text editor.
-
-## 📄 License
-
-RusTXT is released under the [MIT License](LICENSE).
+MIT. Vendored Iced components retain their upstream MIT licenses.

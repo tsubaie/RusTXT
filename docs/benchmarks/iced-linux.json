@@ -1,0 +1,50 @@
+{
+  "binary": "/home/tsubaie/Projects/RusTXT/target/release/rustxt-iced",
+  "binary_bytes": 15154256,
+  "sha256": "532104ab6580cc39fafb56be1da189a4f1e7460640a9458137ff6b9f9b0cd8c0",
+  "runs": [
+    {
+      "workload": "empty",
+      "repeat": 0,
+      "Rss_kib": 22440,
+      "Pss_kib": 16552,
+      "USS_kib": 14744
+    },
+    {
+      "workload": "empty",
+      "repeat": 1,
+      "Rss_kib": 22280,
+      "Pss_kib": 16386,
+      "USS_kib": 14580
+    },
+    {
+      "workload": "empty",
+      "repeat": 2,
+      "Rss_kib": 22320,
+      "Pss_kib": 16450,
+      "USS_kib": 14636
+    },
+    {
+      "workload": "1mib",
+      "repeat": 0,
+      "Rss_kib": 30560,
+      "Pss_kib": 24447,
+      "USS_kib": 22556
+    },
+    {
+      "workload": "1mib",
+      "repeat": 1,
+      "Rss_kib": 30288,
+      "Pss_kib": 24328,
+      "USS_kib": 22448
+    },
+    {
+      "workload": "1mib",
+      "repeat": 2,
+      "Rss_kib": 30492,
+      "Pss_kib": 24421,
+      "USS_kib": 22548
+    }
+  ],
+  "method": "Xvfb 1280x1024, window 1000x700, software rendering, 5s warmup, median of 5 samples, 3 fresh sessions per workload"
+}

@@ -10,6 +10,9 @@ fn old_rustpad_dirs_are_adopted_when_new_ones_are_missing() {
     fs::create_dir_all(data.join("rustpad")).unwrap();
     fs::write(config.join("rustpad/config.toml"), "theme = \"x\"\n").unwrap();
     fs::write(data.join("rustpad/session.db"), b"db").unwrap();
+    std::env::remove_var("RUSTXT_DATA_DIR");
+    std::env::set_var("APPDATA", &config);
+    std::env::set_var("LOCALAPPDATA", &data);
     std::env::set_var("XDG_CONFIG_HOME", &config);
     std::env::set_var("XDG_DATA_HOME", &data);
     std::env::set_var("XDG_CACHE_HOME", root.path().join("cache"));

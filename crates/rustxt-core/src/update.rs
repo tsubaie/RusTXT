@@ -1,6 +1,6 @@
 //! Checking GitHub for a newer release and, for per-user installs, putting
 //! it in place. Network, checksum and archive work go through curl,
-//! sha256sum and tar, which every Linux install already has, so the app
+//! and tar. Checksums use the shared Rust SHA-256 implementation, so the app
 //! carries no HTTP stack of its own. Nothing here runs unless the user asks.
 
 use serde::Deserialize;
@@ -195,19 +195,8 @@ fn verify_checksum(file: &Path, sums: &str, name: &str) -> Result<(), String> {
         .find(|(_, entry)| entry.trim() == name)
         .map(|(hash, _)| hash.trim().to_ascii_lowercase())
         .ok_or_else(|| format!("{CHECKSUMS} has no entry for {name}."))?;
-    let output = Command::new("sha256sum")
-        .arg(file)
-        .output()
-        .map_err(|error| format!("sha256sum is needed to verify the update: {error}"))?;
-    let actual = String::from_utf8_lossy(&output.stdout)
-        .split_whitespace()
-        .next()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    if !output.status.success()
-        || expected.len() != 64
-        || !expected.bytes().all(|byte| byte.is_ascii_hexdigit())
-    {
+    let actual = crate::files::disk_fingerprint(file)?;
+    if expected.len() != 64 || !expected.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err(format!(
             "{CHECKSUMS} contains an invalid checksum for {name}."
         ));
@@ -337,6 +326,7 @@ mod tests {
 
     /// A release served from local files, fetched through curl like the real
     /// thing, unpacked and swapped into place.
+    #[cfg(unix)]
     fn fake_release(dir: &Path, version: &str, tamper: bool) -> Release {
         let tag = format!("v{version}");
         let release = Release {
@@ -358,16 +348,13 @@ mod tests {
             .status()
             .unwrap()
             .success());
-        let sum = Command::new("sha256sum")
-            .arg(&name)
-            .current_dir(dir)
-            .output()
-            .unwrap();
-        let mut sums = String::from_utf8(sum.stdout).unwrap();
+        let mut sums = format!(
+            "{}  {name}\n",
+            crate::files::disk_fingerprint(&dir.join(&name)).unwrap()
+        );
         if tamper {
-            sums = sums
-                .replacen(char::is_alphanumeric, "0", 1)
-                .replacen('0', "1", 1);
+            let replacement = if sums.starts_with('0') { "1" } else { "0" };
+            sums.replace_range(..1, replacement);
         }
         fs::write(dir.join(CHECKSUMS), format!("deadbeef  other.deb\n{sums}")).unwrap();
         let file_url = |file: &str| format!("file://{}", dir.join(file).display());
@@ -388,6 +375,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn installs_a_verified_tarball_over_the_old_binary() {
         let dir = tempfile::tempdir().unwrap();
         let target = dir.path().join("bin/rustxt");
@@ -416,6 +404,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn a_bad_checksum_leaves_the_old_binary_alone() {
         let dir = tempfile::tempdir().unwrap();
         let target = dir.path().join("rustxt");

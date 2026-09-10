@@ -120,6 +120,7 @@ impl Paths {
     /// dotfile-style editor to keep it.
     pub fn discover() -> Self {
         let home = std::env::var_os("HOME")
+            .or_else(|| std::env::var_os("USERPROFILE"))
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."));
         let xdg = |var: &str, fallback: &str| {
@@ -128,12 +129,27 @@ impl Paths {
                 .filter(|p| p.is_absolute())
                 .unwrap_or_else(|| home.join(fallback))
         };
-        let paths = Self {
+        let mut paths = Self {
             config_dir: xdg("XDG_CONFIG_HOME", ".config").join("rustxt"),
             data_dir: xdg("XDG_DATA_HOME", ".local/share").join("rustxt"),
             cache_dir: xdg("XDG_CACHE_HOME", ".cache").join("rustxt"),
             omarchy_theme_dir: xdg("XDG_STATE_HOME", ".local/state").join("omarchy/current/theme"),
         };
+        #[cfg(target_os = "windows")]
+        {
+            let roaming = std::env::var_os("APPDATA")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| home.join("AppData/Roaming"));
+            let local = std::env::var_os("LOCALAPPDATA")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| home.join("AppData/Local"));
+            paths.config_dir = roaming.join("rustxt");
+            paths.data_dir = local.join("rustxt");
+            paths.cache_dir = local.join("rustxt/cache");
+        }
+        if let Some(data) = std::env::var_os("RUSTXT_DATA_DIR") {
+            paths.data_dir = PathBuf::from(data);
+        }
         paths.adopt_previous_name();
         paths
     }

@@ -1,0 +1,78 @@
+name: Iced cross-platform
+on:
+  push:
+    branches: [main, 'feat/iced-*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libwayland-dev libfontconfig1-dev libx11-dev libxrandr-dev libxi-dev xvfb xdotool imagemagick fonts-noto-core
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --locked -p rustxt-core -p rustxt-iced --all-targets -- -D warnings
+      - name: Tests
+        run: cargo test --locked -p rustxt-core -p rustxt-iced
+      - name: Release build
+        run: cargo build --release --locked -p rustxt-iced
+      - name: Real window and recovery tests
+        if: runner.os == 'Linux'
+        run: xvfb-run -a -s '-screen 0 1280x1024x24' python3 tools/iced-e2e.py target/release/rustxt-iced target/iced-e2e
+      - name: Package Linux
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p dist/rustxt
+          cp target/release/rustxt-iced dist/rustxt/rustxt
+          cp LICENSE README.md dist/rustxt/
+          tar -C dist -czf dist/rustxt-linux-x86_64.tar.gz rustxt
+      - name: Package macOS
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p dist/RusTXT.app/Contents/MacOS dist/RusTXT.app/Contents/Resources
+          cp target/release/rustxt-iced dist/RusTXT.app/Contents/MacOS/rustxt
+          cp packaging/macos/Info.plist dist/RusTXT.app/Contents/
+          mkdir -p target/RusTXT.iconset
+          for size in 16 32 128 256 512; do
+            sips -z "$size" "$size" data/icons/com.tsubaie.rustxt.png --out "target/RusTXT.iconset/icon_${size}x${size}.png"
+          done
+          iconutil -c icns target/RusTXT.iconset -o dist/RusTXT.app/Contents/Resources/RusTXT.icns
+          codesign --force --deep --sign - dist/RusTXT.app
+          ditto -c -k --sequesterRsrc --keepParent dist/RusTXT.app dist/rustxt-macos-arm64.zip
+      - name: Package Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/rustxt
+          Copy-Item target/release/rustxt-iced.exe dist/rustxt/rustxt.exe
+          Copy-Item LICENSE,README.md dist/rustxt/
+          Compress-Archive dist/rustxt/* dist/rustxt-windows-x86_64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rustxt-${{ matrix.os }}
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+      - uses: actions/upload-artifact@v4
+        if: failure() && runner.os == 'Linux'
+        with:
+          name: iced-ui-failure
+          path: target/iced-e2e

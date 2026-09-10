@@ -133,6 +133,7 @@ pub fn atomic_save(path: &Path, content: &[u8]) -> Result<(), String> {
         .map_err(|e| e.error.to_string())?;
     // Make the rename durable as well as atomic. Without syncing the directory,
     // a power loss can forget the new directory entry even after the file sync.
+    #[cfg(unix)]
     fs::File::open(parent)
         .and_then(|directory| directory.sync_all())
         .map_err(|e| e.to_string())?;

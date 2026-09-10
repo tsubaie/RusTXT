@@ -257,6 +257,19 @@ impl Storage {
             .map_err(text)
     }
 
+    /// Atomically persist a snapshot and a frontend's associated editor metadata.
+    pub fn save_snapshot_with_state(
+        &self,
+        document: &DocumentState,
+        key: &str,
+        value: &str,
+    ) -> Result<(), String> {
+        let transaction = self.connection.unchecked_transaction().map_err(text)?;
+        self.save_snapshot(document)?;
+        self.set_state(key, value)?;
+        transaction.commit().map_err(text)
+    }
+
     /// Update only cursor and scroll position; avoids rewriting the content.
     pub fn save_view_state(
         &self,
