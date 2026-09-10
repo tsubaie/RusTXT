@@ -1,0 +1,50 @@
+{
+  "binary": "/home/tsubaie/Projects/RusTXT/target/release/rustxt-iced",
+  "binary_bytes": 17272304,
+  "sha256": "dc3f7bf806a9badea321089ddc65c89f5cb363b1ab0c46fec56961455bc8739f",
+  "runs": [
+    {
+      "workload": "empty",
+      "repeat": 0,
+      "Rss_kib": 24180,
+      "Pss_kib": 9947,
+      "USS_kib": 4340
+    },
+    {
+      "workload": "empty",
+      "repeat": 1,
+      "Rss_kib": 24152,
+      "Pss_kib": 11974,
+      "USS_kib": 4372
+    },
+    {
+      "workload": "empty",
+      "repeat": 2,
+      "Rss_kib": 24216,
+      "Pss_kib": 18014,
+      "USS_kib": 16276
+    },
+    {
+      "workload": "1mib",
+      "repeat": 0,
+      "Rss_kib": 31436,
+      "Pss_kib": 24915,
+      "USS_kib": 23076
+    },
+    {
+      "workload": "1mib",
+      "repeat": 1,
+      "Rss_kib": 31476,
+      "Pss_kib": 24954,
+      "USS_kib": 23116
+    },
+    {
+      "workload": "1mib",
+      "repeat": 2,
+      "Rss_kib": 31540,
+      "Pss_kib": 19089,
+      "USS_kib": 11412
+    }
+  ],
+  "method": "Xvfb 1280x1024, window 1000x700, software rendering, 5s warmup, median of 5 samples, 3 fresh sessions per workload; other Iced instances ran during portions of this follow-up: RSS remains per-process, but PSS/USS are not comparable with the isolated baseline."
+}

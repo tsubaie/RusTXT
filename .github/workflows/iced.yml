@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-14, windows-latest]
+        os: [ubuntu-22.04, macos-15, macos-15-intel, windows-2022]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -32,11 +32,21 @@ jobs:
         run: cargo clippy --locked -p rustxt-core -p rustxt-iced --all-targets -- -D warnings
       - name: Tests
         run: cargo test --locked -p rustxt-core -p rustxt-iced
+      - name: Renderer redraw regression
+        run: cargo test --locked -p iced_tiny_skia --lib
       - name: Release build
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "12.0"
         run: cargo build --release --locked -p rustxt-iced
+      - name: Native startup smoke test
+        if: runner.os != 'Linux'
+        run: python tools/iced-startup-smoke.py target/release
       - name: Real window and recovery tests
         if: runner.os == 'Linux'
         run: xvfb-run -a -s '-screen 0 1280x1024x24' python3 tools/iced-e2e.py target/release/rustxt-iced target/iced-e2e
+      - name: Fractional-scale hover rendering
+        if: runner.os == 'Linux'
+        run: xvfb-run -a -s '-screen 0 1600x1200x24' python3 tools/iced-rendering-e2e.py target/release/rustxt-iced target/iced-rendering-e2e
       - name: Package Linux
         if: runner.os == 'Linux'
         run: |
@@ -46,6 +56,8 @@ jobs:
           tar -C dist -czf dist/rustxt-linux-x86_64.tar.gz rustxt
       - name: Package macOS
         if: runner.os == 'macOS'
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "12.0"
         run: |
           mkdir -p dist/RusTXT.app/Contents/MacOS dist/RusTXT.app/Contents/Resources
           cp target/release/rustxt-iced dist/RusTXT.app/Contents/MacOS/rustxt
@@ -56,7 +68,7 @@ jobs:
           done
           iconutil -c icns target/RusTXT.iconset -o dist/RusTXT.app/Contents/Resources/RusTXT.icns
           codesign --force --deep --sign - dist/RusTXT.app
-          ditto -c -k --sequesterRsrc --keepParent dist/RusTXT.app dist/rustxt-macos-arm64.zip
+          ditto -c -k --sequesterRsrc --keepParent dist/RusTXT.app "dist/rustxt-macos-$(uname -m).zip"
       - name: Package Windows
         if: runner.os == 'Windows'
         shell: pwsh
@@ -75,4 +87,6 @@ jobs:
         if: failure() && runner.os == 'Linux'
         with:
           name: iced-ui-failure
-          path: target/iced-e2e
+          path: |
+            target/iced-e2e
+            target/iced-rendering-e2e

@@ -1,13 +1,14 @@
 use crate::{
     document::{self, Document},
+    icons::{icon, Icon},
     instance::Instance,
     search::Search,
 };
 use iced::{
     keyboard::{self, key::Named, Key},
     widget::{
-        self, button, checkbox, column, container, operation, pick_list, row, scrollable, slider,
-        space, text, text_editor, text_input,
+        self, button, column, container, operation, pick_list, row, scrollable, space, text,
+        text_editor, text_input, toggler,
     },
     window, Element, Event, Fill, Font, Subscription, Task, Theme,
 };
@@ -27,11 +28,16 @@ use std::{
     time::Duration,
 };
 
+const UI: f32 = 44.0 / 3.0;
+const CAPTION: f32 = UI * 0.85;
+const REPLACE: &str = "replace";
+
 const EDITOR: &str = "editor";
 const FIND: &str = "find";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub fn run() -> iced::Result {
+    crate::fonts::configure(system_font("sans-serif"));
     let paths = Paths::discover();
     let arguments: Vec<PathBuf> = std::env::args_os()
         .skip(1)
@@ -94,7 +100,10 @@ pub fn run() -> iced::Result {
         ..Default::default()
     })
     .settings(iced::Settings {
-        default_text_size: iced::Pixels(14.0),
+        default_font: system_ui_font()
+            .map(|family| Font::with_name(Box::leak(family.into_boxed_str())))
+            .unwrap_or_default(),
+        default_text_size: iced::Pixels(UI),
         ..Default::default()
     })
     .run()
@@ -106,6 +115,8 @@ pub enum Menu {
     Edit,
     View,
     Settings,
+    Zoom,
+    Recent,
 }
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -127,6 +138,8 @@ pub enum Message {
     Quit,
     Menu(Menu),
     CloseMenu,
+    Submenu(Option<Menu>),
+    ToggleReplace,
     Dismiss,
     Find(bool),
     Query(String),
@@ -154,6 +167,10 @@ pub enum Message {
     Theme(String),
     Font(String),
     ApplyFont,
+    ResetFont,
+    ChooseFont,
+    FontFilter(String),
+    FontChosen(String),
     Zoom(u32),
     Titlebar(String),
     GoTo,
@@ -175,7 +192,11 @@ pub struct App {
     find_open: bool,
     replace_open: bool,
     menu: Option<Menu>,
+    submenu: Option<Menu>,
     settings_open: bool,
+    font_picker: bool,
+    font_filter: String,
+    font_families: Vec<String>,
     about_open: bool,
     go_open: bool,
     go_line: String,
@@ -189,7 +210,9 @@ pub struct App {
     editor_size: f32,
     font_names: Vec<&'static str>,
     font_draft: String,
+    system_monospace: String,
     theme: Option<Theme>,
+    ui_palette: Option<config::Palette>,
     save_queue: std::collections::VecDeque<String>,
     window_size: iced::Size,
     modifiers: keyboard::Modifiers,
@@ -239,7 +262,11 @@ impl App {
             find_open: false,
             replace_open: false,
             menu: None,
+            submenu: None,
             settings_open: false,
+            font_picker: false,
+            font_filter: String::new(),
+            font_families: Vec::new(),
             about_open: false,
             go_open: false,
             go_line: String::new(),
@@ -248,10 +275,12 @@ impl App {
             instance,
             reload,
             _watcher: watcher,
+            system_monospace: system_font("monospace").unwrap_or_default(),
             editor_font: Font::MONOSPACE,
-            editor_size: 16.0,
+            editor_size: 15.0,
             font_names: Vec::new(),
             theme: None,
+            ui_palette: None,
             save_queue: std::collections::VecDeque::new(),
             window_size,
             modifiers: keyboard::Modifiers::default(),
@@ -286,6 +315,7 @@ impl App {
     }
     fn apply_appearance(&mut self) {
         let resolved = config::resolve_theme(&self.config.appearance.theme, &self.paths);
+        self.ui_palette = resolved.palette.clone();
         self.theme = if let Some(p) = resolved.palette {
             let base = if p.mode == "dark" {
                 Theme::Dark
@@ -321,9 +351,14 @@ impl App {
                     .ok()
                     .map(|size| (family, size * 4.0 / 3.0))
             })
-            .unwrap_or((description, 16.0));
+            .unwrap_or((description, 15.0));
         self.editor_size = size.clamp(6.0, 96.0);
         let family = family.split(',').next().unwrap_or("").trim();
+        let family = if family.is_empty() {
+            self.system_monospace.as_str()
+        } else {
+            family
+        };
         self.editor_font = if family.is_empty() {
             Font::MONOSPACE
         } else {
@@ -348,6 +383,15 @@ impl App {
             iced::event::listen_with(|event, status, _| {
                 if let Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) = event {
                     return Some(Message::Modifiers(modifiers));
+                }
+                if matches!(
+                    &event,
+                    Event::Keyboard(keyboard::Event::KeyPressed {
+                        key: Key::Named(Named::Escape),
+                        ..
+                    })
+                ) {
+                    return Some(Message::Dismiss);
                 }
                 if status == iced::event::Status::Ignored {
                     if let Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) =
@@ -559,8 +603,11 @@ impl App {
                         return self.update(Message::ZoomBy(-lines.signum() * 10));
                     }
                 }
+                let edits = action.is_edit();
                 self.doc_mut().action(action);
-                self.refresh_search();
+                if edits {
+                    self.refresh_search();
+                }
             }
             Message::New => {
                 self.menu = None;
@@ -685,11 +732,16 @@ impl App {
                     return iced::exit();
                 }
             }
+            Message::ToggleReplace => {
+                self.replace_open = !self.replace_open;
+            }
             Message::CloseMenu => {
                 self.menu = None;
                 return operation::focus(EDITOR);
             }
+            Message::Submenu(menu) => self.submenu = menu,
             Message::Menu(menu) => {
+                self.submenu = None;
                 self.menu = if self.menu == Some(menu) {
                     None
                 } else {
@@ -697,6 +749,11 @@ impl App {
                 };
             }
             Message::Dismiss => {
+                if self.font_picker {
+                    self.font_picker = false;
+                    self.font_draft = self.config.editor.font.clone();
+                    return Task::none();
+                }
                 self.menu = None;
                 if self.settings_open && self.font_draft != self.config.editor.font {
                     self.config.editor.font = self.font_draft.clone();
@@ -712,10 +769,15 @@ impl App {
             }
             Message::Find(replace) => {
                 self.menu = None;
+                let selection = self.doc().selected_range();
+                let selected = &self.doc().state.content[selection];
+                if !selected.is_empty() && !selected.contains('\n') {
+                    self.search.query = selected.to_owned();
+                }
                 self.find_open = true;
-                self.replace_open = replace;
+                self.replace_open |= replace;
                 self.refresh_search();
-                return operation::focus(FIND);
+                return operation::focus(if replace { REPLACE } else { FIND });
             }
             Message::Query(query) => {
                 self.search.query = query;
@@ -735,6 +797,8 @@ impl App {
                 self.refresh_search();
             }
             Message::FindNext(backwards) => {
+                self.menu = None;
+                self.submenu = None;
                 if let Some(range) = self.search.next(self.doc().selected_range(), backwards) {
                     self.doc_mut().select(range);
                 }
@@ -863,10 +927,14 @@ impl App {
                 self.about_open = true;
             }
             Message::Wrap(value) => {
+                self.menu = None;
+                self.submenu = None;
                 self.config.editor.word_wrap = value;
                 return self.save_settings();
             }
             Message::Status(value) => {
+                self.menu = None;
+                self.submenu = None;
                 self.config.window.status_bar = value;
                 return self.save_settings();
             }
@@ -875,11 +943,45 @@ impl App {
                 return self.save_settings();
             }
             Message::Font(value) => self.font_draft = value,
+            Message::ChooseFont => {
+                self.font_filter.clear();
+                self.font_picker = true;
+                if self.font_families.is_empty() {
+                    let mut system = iced_graphics::text::font_system()
+                        .write()
+                        .expect("font system");
+                    self.font_families = system
+                        .raw()
+                        .db()
+                        .faces()
+                        .flat_map(|face| face.families.iter().map(|(name, _)| name.clone()))
+                        .collect();
+                    self.font_families.sort_unstable();
+                    self.font_families.dedup();
+                }
+            }
+            Message::FontFilter(value) => self.font_filter = value,
+            Message::FontChosen(value) => {
+                let size = self
+                    .font_draft
+                    .rsplit_once(' ')
+                    .and_then(|(_, size)| size.parse::<u32>().ok())
+                    .unwrap_or(12);
+                self.font_draft = format!("{value} {size}");
+            }
+            Message::ResetFont => {
+                self.font_draft.clear();
+                self.config.editor.font.clear();
+                return self.save_settings();
+            }
             Message::ApplyFont => {
+                self.font_picker = false;
                 self.config.editor.font = self.font_draft.clone();
                 return self.save_settings();
             }
             Message::Zoom(value) => {
+                self.menu = None;
+                self.submenu = None;
                 self.config.appearance.zoom = value.clamp(10, 500);
                 return self.save_settings();
             }
@@ -978,68 +1080,137 @@ impl App {
         if self.docs.is_empty() {
             return container(text("Closing…")).into();
         }
-        let menus = row![
-            button("File")
-                .on_press(Message::Menu(Menu::File))
-                .style(button::text),
-            button("Edit")
-                .on_press(Message::Menu(Menu::Edit))
-                .style(button::text),
-            button("View")
-                .on_press(Message::Menu(Menu::View))
-                .style(button::text),
-            button("Settings")
-                .on_press(Message::Menu(Menu::Settings))
-                .style(button::text),
-            space::horizontal(),
-            button("−")
-                .on_press(Message::ZoomBy(-10))
-                .style(button::text),
-            text(format!("{}%", self.config.appearance.zoom)),
-            button("+")
-                .on_press(Message::ZoomBy(10))
-                .style(button::text),
+        let palette = self.ui_palette.as_ref();
+        let flat = move |theme: &Theme, status| {
+            crate::style::Colors::new(theme, palette).flat(status, false)
+        };
+        let input_style = move |theme: &Theme, status| {
+            crate::style::Colors::new(theme, palette).input(theme, status)
+        };
+        let menus = [
+            ("File", Menu::File),
+            ("Edit", Menu::Edit),
+            ("View", Menu::View),
+            ("Settings", Menu::Settings),
         ]
-        .align_y(iced::Center)
-        .spacing(4)
-        .padding([4, 8]);
+        .into_iter()
+        .fold(row![].spacing(0), |menus, (label, menu)| {
+            let selected = self.menu == Some(menu);
+            menus.push(
+                button(text(label).size(UI))
+                    .padding([5, 10])
+                    .on_press(Message::Menu(menu))
+                    .style(move |theme, status| {
+                        crate::style::Colors::new(theme, palette).flat(status, selected)
+                    }),
+            )
+        });
+        let menus = container(menus)
+            .padding([0, 4])
+            .width(Fill)
+            .height(31)
+            .style(move |theme| crate::style::Colors::new(theme, palette).bar());
         let tabs = self
             .docs
             .iter()
             .enumerate()
-            .fold(row![].spacing(3), |tabs, (index, doc)| {
-                let title = format!(
-                    "{}{}",
-                    if doc.state.dirty { "• " } else { "" },
-                    doc.state.title
-                );
-                tabs.push(
+            .fold(row![].spacing(4), |tabs, (index, doc)| {
+                let selected = index == self.active;
+                let dot = container(space::horizontal().width(14).height(14)).style(move |theme| {
+                    container::Style {
+                        background: doc
+                            .state
+                            .dirty
+                            .then(|| crate::style::Colors::new(theme, palette).foreground.into()),
+                        border: iced::Border {
+                            radius: 7.0.into(),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    }
+                });
+                let title: String = doc.state.title.chars().take(23).collect();
+                let title = if title.len() < doc.state.title.len() {
+                    format!("{title}…")
+                } else {
+                    title
+                };
+                let base = button(
                     row![
-                        button(text(title)).on_press(Message::Select(index)).style(
-                            if index == self.active {
-                                button::primary
-                            } else {
-                                button::secondary
-                            }
-                        ),
-                        button("×")
-                            .on_press(Message::Close(index))
-                            .style(button::text)
+                        dot,
+                        text(title).size(UI).width(Fill).align_x(iced::Center),
+                        space::horizontal().width(22)
                     ]
-                    .align_y(iced::Center),
+                    .height(Fill)
+                    .align_y(iced::Center)
+                    .spacing(8),
                 )
-            })
-            .push(button("+").on_press(Message::New).style(button::text));
-        let tabs = scrollable(tabs)
-            .direction(scrollable::Direction::Horizontal(
-                scrollable::Scrollbar::new(),
-            ))
-            .height(42);
+                .padding([0, 10])
+                .width(216)
+                .height(34)
+                .on_press(Message::Select(index))
+                .style(move |theme, status| {
+                    crate::style::Colors::new(theme, palette).flat(status, selected)
+                });
+                let close = container(
+                    button(container(icon(Icon::Close)).center(Fill))
+                        .width(24)
+                        .height(24)
+                        .padding(0)
+                        .style(flat)
+                        .on_press(Message::Close(index)),
+                )
+                .align_right(Fill)
+                .center_y(Fill)
+                .padding([0, 6]);
+                let tab: Element<'_, Message> = if selected {
+                    widget::stack![base, close].into()
+                } else {
+                    widget::hover(base, close)
+                };
+                tabs.push(hint(
+                    widget::mouse_area(tab).on_middle_press(Message::Close(index)),
+                    &doc.state.title,
+                    palette,
+                ))
+            });
+        let tabs = container(
+            row![
+                scrollable(tabs)
+                    .direction(scrollable::Direction::Horizontal(
+                        scrollable::Scrollbar::new().width(2).scroller_width(2)
+                    ))
+                    .width(Fill)
+                    .height(34),
+                button(container(icon(Icon::Plus)).center(Fill))
+                    .width(36)
+                    .height(34)
+                    .padding(0)
+                    .style(flat)
+                    .on_press(Message::New)
+            ]
+            .align_y(iced::Center)
+            .spacing(8),
+        )
+        .padding(iced::Padding {
+            top: 7.0,
+            bottom: 6.0,
+            left: 6.0,
+            right: 6.0,
+        })
+        .height(47)
+        .width(Fill)
+        .style(move |theme| crate::style::Colors::new(theme, palette).bar());
         let doc = self.doc();
         let editor = text_editor(&doc.content)
             .id(EDITOR)
             .height(Fill)
-            .padding(12)
+            .padding(iced::Padding {
+                top: 8.0,
+                right: 12.0,
+                bottom: 24.0,
+                left: 12.0,
+            })
             .font(self.editor_font)
             .size(self.editor_size * self.config.appearance.zoom as f32 / 100.0)
             .wrapping(if self.config.editor.word_wrap {
@@ -1048,10 +1219,13 @@ impl App {
                 text::Wrapping::None
             })
             .on_action(Message::Action)
-            .style(|theme, status| {
+            .style(move |theme, status| {
+                let colors = crate::style::Colors::new(theme, palette);
                 let mut style = text_editor::default(theme, status);
                 style.border = iced::Border::default();
-                style.background = theme.palette().background.into();
+                style.background = colors.background.into();
+                style.value = colors.foreground;
+                style.selection = colors.selection;
                 style
             })
             .key_binding(|press| {
@@ -1059,59 +1233,206 @@ impl App {
                     .map(text_editor::Binding::Custom)
                     .or_else(|| text_editor::Binding::from_key_press(press))
             });
-        let mut body = column![menus, container(tabs).padding([0, 8])];
-        if self.find_open {
+        let editor: Element<'_, Message> = if self.find_open {
             let count = if self.search.error.is_some() {
-                "Invalid expression".to_owned()
+                "!".to_owned()
+            } else if self.search.query.is_empty() {
+                String::new()
+            } else if self.search.matches.is_empty() {
+                "No results".to_owned()
+            } else if let Some(index) = self
+                .search
+                .matches
+                .iter()
+                .position(|range| *range == doc.selected_range())
+            {
+                format!("{} of {}", index + 1, self.search.matches.len())
             } else {
-                format!("{} matches", self.search.matches.len())
+                self.search.matches.len().to_string()
             };
-            let mut find = column![
-                row![
-                    text_input("Find", &self.search.query)
-                        .id(FIND)
-                        .on_input(Message::Query)
-                        .on_submit(Message::FindNext(false)),
-                    button("Previous")
-                        .on_press(Message::FindNext(true))
-                        .style(button::secondary),
-                    button("Next")
-                        .on_press(Message::FindNext(false))
-                        .style(button::secondary),
-                    button("×").on_press(Message::Dismiss).style(button::text)
-                ]
-                .spacing(6)
-                .align_y(iced::Center),
-                row![
-                    checkbox(self.search.case_sensitive)
-                        .label("Match case")
-                        .on_toggle(Message::MatchCase),
-                    checkbox(self.search.whole_word)
-                        .label("Whole word")
-                        .on_toggle(Message::WholeWord),
-                    checkbox(self.search.regex)
-                        .label("Regex")
-                        .on_toggle(Message::Regex),
-                    text(count)
-                ]
-                .spacing(16)
-            ]
-            .spacing(8);
-            if self.replace_open {
-                find = find.push(
-                    row![
-                        text_input("Replace with", &self.search.replacement)
-                            .on_input(Message::Replacement)
-                            .on_submit(Message::Replace),
-                        button("Replace").on_press(Message::Replace),
-                        button("Replace all").on_press(Message::ReplaceAll)
-                    ]
-                    .spacing(6),
+            let count_width = count.chars().count() as f32 * CAPTION * 0.65;
+            let option = |label, value, message| {
+                let description = match label {
+                    "Aa" => "Match case: distinguish uppercase and lowercase",
+                    "ab" => "Match whole words only",
+                    _ => "Use regular expressions",
+                };
+                hint(
+                    button(
+                        text(label)
+                            .size(CAPTION)
+                            .font(bold_font())
+                            .width(Fill)
+                            .height(Fill)
+                            .center(),
+                    )
+                    .width(50)
+                    .height(34)
+                    .padding(0)
+                    .on_press(message)
+                    .style(move |theme, status| {
+                        crate::style::Colors::new(theme, palette).flat(status, value)
+                    }),
+                    description,
+                    palette,
+                )
+            };
+            let tool = |kind, message| {
+                let description = match &message {
+                    Message::ToggleReplace if self.replace_open => "Hide replacement controls",
+                    Message::ToggleReplace => "Show replacement controls (Ctrl+H)",
+                    Message::FindNext(true) => "Find previous match (Shift+F3)",
+                    Message::FindNext(false) => "Find next match (F3)",
+                    _ => "Close Find and Replace (Esc)",
+                };
+                hint(
+                    button(container(icon(kind)).center(Fill))
+                        .width(34)
+                        .height(34)
+                        .padding(0)
+                        .style(flat)
+                        .on_press(message),
+                    description,
+                    palette,
+                )
+            };
+            let field = text_input("Find", &self.search.query)
+                .id(FIND)
+                .on_input(Message::Query)
+                .on_submit(Message::FindNext(false))
+                .size(UI)
+                .padding(iced::Padding {
+                    left: 30.0,
+                    right: 28.0,
+                    top: 6.0,
+                    bottom: 6.0,
+                })
+                .style(input_style);
+            let mut field = widget::stack![
+                field,
+                container(icon(Icon::Search)).padding([0, 8]).center_y(Fill)
+            ];
+            if !self.search.query.is_empty() {
+                field = field.push(
+                    container(hint(
+                        button(container(icon(Icon::Close)).center(Fill))
+                            .width(24)
+                            .height(28)
+                            .padding(0)
+                            .style(flat)
+                            .on_press(Message::Query(String::new())),
+                        "Clear search",
+                        palette,
+                    ))
+                    .align_right(Fill)
+                    .center_y(Fill)
+                    .padding([0, 4]),
                 );
             }
-            body = body.push(container(find).padding([8, 12]));
-        }
-        body = body.push(editor);
+            let field = container(field).width(212).height(34);
+            let find_row = row![
+                tool(
+                    if self.replace_open {
+                        Icon::Down
+                    } else {
+                        Icon::Right
+                    },
+                    Message::ToggleReplace
+                ),
+                field,
+                container(text(count).size(CAPTION))
+                    .width(count_width + 8.0)
+                    .padding([0, 4]),
+                tool(Icon::Up, Message::FindNext(true)),
+                tool(Icon::Down, Message::FindNext(false)),
+                option(
+                    "Aa",
+                    self.search.case_sensitive,
+                    Message::MatchCase(!self.search.case_sensitive)
+                ),
+                option(
+                    "ab",
+                    self.search.whole_word,
+                    Message::WholeWord(!self.search.whole_word)
+                ),
+                option(".*", self.search.regex, Message::Regex(!self.search.regex)),
+                tool(Icon::Close, Message::Dismiss)
+            ]
+            .spacing(2)
+            .align_y(iced::Center);
+            let mut find = column![find_row].spacing(6);
+            if self.replace_open {
+                let raised = move |theme: &Theme, status| {
+                    let colors = crate::style::Colors::new(theme, palette);
+                    let mut style = colors.flat(status, true);
+                    if status == button::Status::Active {
+                        style.background = Some(colors.control.into());
+                    }
+                    style
+                };
+                find = find.push(
+                    row![
+                        space::horizontal().width(30),
+                        text_input("Replace with", &self.search.replacement)
+                            .id(REPLACE)
+                            .on_input(Message::Replacement)
+                            .on_submit(Message::Replace)
+                            .size(UI)
+                            .padding([6, 8])
+                            .style(input_style),
+                        hint(
+                            button(text("Replace").font(bold_font()))
+                                .height(34)
+                                .padding([6, 16])
+                                .style(raised)
+                                .on_press(Message::Replace),
+                            "Replace current match and find the next",
+                            palette
+                        ),
+                        hint(
+                            button(text("Replace all").font(bold_font()))
+                                .height(34)
+                                .padding([6, 16])
+                                .style(raised)
+                                .on_press(Message::ReplaceAll),
+                            "Replace all matches in this document",
+                            palette
+                        )
+                    ]
+                    .spacing(4)
+                    .align_y(iced::Center),
+                );
+            } else {
+                find = find.push(space::vertical().height(0));
+            }
+            let card = container(find)
+                .width(534.0 + count_width)
+                .padding(6)
+                .style(move |theme| crate::style::Colors::new(theme, palette).panel());
+            widget::stack![
+                editor,
+                container(widget::opaque(card))
+                    .align_right(Fill)
+                    .padding([8, 18])
+            ]
+            .into()
+        } else {
+            editor.into()
+        };
+        let separator = || {
+            container(space::horizontal().height(1))
+                .width(Fill)
+                .style(move |theme| container::Style {
+                    background: Some(
+                        crate::style::Colors::new(theme, palette)
+                            .border
+                            .scale_alpha(0.5)
+                            .into(),
+                    ),
+                    ..Default::default()
+                })
+        };
+        let mut body = column![tabs, separator(), menus, editor];
         if self.config.window.status_bar {
             let cursor = doc.content.cursor().position;
             let column = doc
@@ -1119,24 +1440,52 @@ impl App {
                 .line(cursor.line)
                 .map(|l| l.text[..cursor.column.min(l.text.len())].chars().count())
                 .unwrap_or(0);
-            body = body.push(
+            let divider = || {
+                container(space::horizontal().width(1).height(10)).style(move |theme| {
+                    container::Style {
+                        background: Some(crate::style::Colors::new(theme, palette).border.into()),
+                        ..Default::default()
+                    }
+                })
+            };
+            let ending = match doc.state.line_ending {
+                LineEnding::Lf => "Unix (LF)",
+                LineEnding::Crlf => "Windows (CRLF)",
+            };
+            body = body.push(separator()).push(
                 container(
                     row![
-                        text(format!("Ln {}, Col {}", cursor.line + 1, column + 1)),
+                        text(format!("Ln {}, Col {}", cursor.line + 1, column + 1)).size(CAPTION),
                         space::horizontal(),
-                        text(format!("{} characters", doc.state.content.chars().count())),
-                        text(doc.state.line_ending.as_str()),
-                        text("UTF-8")
+                        divider(),
+                        text(format!("{} characters", doc.state.content.chars().count()))
+                            .size(CAPTION),
+                        divider(),
+                        text(format!("{}%", self.config.appearance.zoom)).size(CAPTION),
+                        divider(),
+                        text(ending).size(CAPTION),
+                        divider(),
+                        text("UTF-8").size(CAPTION)
                     ]
-                    .spacing(20),
+                    .spacing(10)
+                    .align_y(iced::Center),
                 )
-                .padding([6, 12]),
+                .padding([3, 12])
+                .width(Fill)
+                .style(move |theme| {
+                    let colors = crate::style::Colors::new(theme, palette);
+                    container::Style {
+                        text_color: Some(colors.foreground.scale_alpha(0.75)),
+                        ..colors.bar()
+                    }
+                }),
             );
         }
         let base: Element<'_, Message> = container(body).height(Fill).width(Fill).into();
         if let Some(error) = &self.error {
             return modal(
                 base,
+                palette,
                 column![
                     text("Could not complete the action").size(20),
                     text(error),
@@ -1148,6 +1497,7 @@ impl App {
         if let Some(id) = &self.discard_id {
             return modal(
                 base,
+                palette,
                 column![
                     text("Discard this tab permanently?").size(20),
                     text("Its recovery copy will be deleted. This cannot be undone."),
@@ -1165,6 +1515,7 @@ impl App {
         if self.go_open {
             return modal(
                 base,
+                palette,
                 column![
                     text("Go to line").size(20),
                     text_input("Line number", &self.go_line)
@@ -1204,58 +1555,352 @@ impl App {
                     }
                 }
             }
-            return modal(
-                base,
+            let choice = |value: &str| Choice {
+                value: value.to_owned(),
+                label: match value {
+                    "auto" => "Automatic",
+                    "system" => "System",
+                    "light" => "Light",
+                    "dark" => "Dark",
+                    "omarchy" => "Omarchy",
+                    "show" => "Always show",
+                    "hide" => "Always hide",
+                    _ => value,
+                }
+                .to_owned(),
+            };
+            let pick_style = move |theme: &Theme, status| {
+                let colors = crate::style::Colors::new(theme, palette);
+                let mut style = pick_list::default(theme, status);
+                style.background = iced::Color::TRANSPARENT.into();
+                style.border = iced::Border::default();
+                style.text_color = colors.foreground;
+                style.handle_color = colors.foreground;
+                style
+            };
+            let separator = || {
+                container(space::horizontal().height(1))
+                    .width(Fill)
+                    .style(move |theme| container::Style {
+                        background: Some(
+                            crate::style::Colors::new(theme, palette)
+                                .chrome
+                                .scale_alpha(0.45)
+                                .into(),
+                        ),
+                        ..Default::default()
+                    })
+            };
+            let theme_choice = |value: &str| {
+                let mut result = choice(value);
+                result.label = match value {
+                    "auto" if self.paths.omarchy_available() => "Automatic (Omarchy theme)".into(),
+                    "auto" => "Automatic (system setting)".into(),
+                    "system" => "Use system setting".into(),
+                    "omarchy" => "Follow Omarchy theme".into(),
+                    "light" | "dark" => result.label,
+                    _ => format!("Custom: {value}"),
+                };
+                result
+            };
+            let appearance = settings_group(
+                palette,
                 column![
-                    row![
-                        text("Settings").size(22),
-                        space::horizontal(),
-                        button("×").on_press(Message::Dismiss).style(button::text)
-                    ]
-                    .align_y(iced::Center),
-                    row![
-                        text("Theme").width(120),
+                    setting(
+                        palette,
+                        "App theme",
+                        if self.config.appearance.theme == "auto" && self.paths.omarchy_available()
+                        {
+                            "Following the active Omarchy theme".into()
+                        } else {
+                            String::new()
+                        },
                         pick_list(
-                            themes,
-                            Some(self.config.appearance.theme.clone()),
-                            Message::Theme
+                            themes
+                                .iter()
+                                .map(|value| theme_choice(value))
+                                .collect::<Vec<_>>(),
+                            Some(theme_choice(&self.config.appearance.theme)),
+                            |choice: Choice| Message::Theme(choice.value)
                         )
-                    ]
-                    .align_y(iced::Center),
-                    row![
-                        text("Title bar").width(120),
-                        pick_list(["auto", "show", "hide"], Some(titlebar), |value| {
-                            Message::Titlebar(value.into())
-                        })
-                    ]
-                    .align_y(iced::Center),
-                    text("Font family and optional point size"),
-                    row![
-                        text_input("System monospace", &self.font_draft)
-                            .on_input(Message::Font)
-                            .on_submit(Message::ApplyFont),
-                        button("Apply").on_press(Message::ApplyFont)
-                    ]
-                    .spacing(8),
-                    row![
-                        text(format!("Zoom: {}%", self.config.appearance.zoom)).width(120),
-                        slider(10..=500, self.config.appearance.zoom, Message::Zoom).step(10u32)
-                    ]
-                    .align_y(iced::Center),
-                    checkbox(self.config.editor.word_wrap)
-                        .label("Word wrap")
-                        .on_toggle(Message::Wrap),
-                    checkbox(self.config.window.status_bar)
-                        .label("Status bar")
-                        .on_toggle(Message::Status),
-                    button("Done").on_press(Message::Dismiss)
+                        .text_size(UI)
+                        .width(220)
+                        .padding(4)
+                        .style(pick_style)
+                        .into()
+                    ),
+                    separator(),
+                    setting(
+                        palette,
+                        "Window title bar",
+                        if desktop::running_on_tiling_compositor() {
+                            "Automatic hides it here because a tiling compositor is running".into()
+                        } else {
+                            "Automatic follows your desktop".into()
+                        },
+                        pick_list(
+                            [choice("auto"), choice("show"), choice("hide")],
+                            Some(choice(titlebar)),
+                            |choice: Choice| Message::Titlebar(choice.value)
+                        )
+                        .text_size(UI)
+                        .padding(4)
+                        .style(pick_style)
+                        .into()
+                    )
                 ]
-                .spacing(18),
+                .into(),
             );
+            let round = move |theme: &Theme, status| {
+                let mut style = crate::style::Colors::new(theme, palette).flat(status, true);
+                style.border.radius = 16.0.into();
+                if matches!(status, button::Status::Active) {
+                    style.background =
+                        Some(crate::style::Colors::new(theme, palette).control.into());
+                }
+                style
+            };
+            let zoom = row![
+                text(format!("{}", self.config.appearance.zoom)).size(UI),
+                button(container(icon(Icon::Minus)).center(Fill))
+                    .width(30)
+                    .height(30)
+                    .padding(0)
+                    .style(round)
+                    .on_press(Message::ZoomBy(-10)),
+                button(container(icon(Icon::Plus)).center(Fill))
+                    .width(30)
+                    .height(30)
+                    .padding(0)
+                    .style(round)
+                    .on_press(Message::ZoomBy(10))
+            ]
+            .spacing(8)
+            .align_y(iced::Center);
+            let font_label = if self.config.editor.font.is_empty() {
+                "Sans Regular 12".to_owned()
+            } else {
+                let (family, size) = self
+                    .config
+                    .editor
+                    .font
+                    .rsplit_once(' ')
+                    .unwrap_or((&self.config.editor.font, "12"));
+                format!("{family} Regular {size}")
+            };
+            let font = row![
+                button(text(font_label).size(UI).font(bold_font()))
+                    .padding([8, 10])
+                    .style(move |theme, status| {
+                        let colors = crate::style::Colors::new(theme, palette);
+                        let mut style = colors.flat(status, true);
+                        if status == button::Status::Active {
+                            style.background = Some(colors.control.into());
+                        }
+                        style
+                    })
+                    .on_press(Message::ChooseFont),
+                button(text("System font").size(UI).font(bold_font()))
+                    .padding([8, 10])
+                    .style(flat)
+                    .on_press_maybe(
+                        (!self.config.editor.font.is_empty()).then_some(Message::ResetFont)
+                    )
+            ]
+            .spacing(12)
+            .align_y(iced::Center);
+            let toggle_style = |theme: &Theme, status| {
+                let mut style = toggler::default(theme, status);
+                style.foreground = iced::Color::WHITE.into();
+                style
+            };
+            let text_settings = settings_group(
+                palette,
+                column![
+                    setting(
+                        palette,
+                        "Zoom",
+                        "Percent. Also Ctrl + mouse wheel, Ctrl + plus and Ctrl + minus".into(),
+                        zoom.into()
+                    ),
+                    separator(),
+                    setting(
+                        palette,
+                        "Font",
+                        if self.config.editor.font.is_empty() { "Following the system monospace font, with Noto Naskh Arabic for Arabic text.".into() } else { "Paired with Noto Naskh Arabic for Arabic text. List two families in config.toml to pick another, e.g. \"JetBrainsMono Nerd Font, Amiri 12\"".into() },
+                        font.into()
+                    ),
+                    separator(),
+                    setting(
+                        palette,
+                        "Word wrap",
+                        "Wrap long lines to the window width".into(),
+                        toggler(self.config.editor.word_wrap)
+                            .size(24)
+                            .style(toggle_style)
+                            .on_toggle(Message::Wrap)
+                            .into()
+                    ),
+                    separator(),
+                    setting(
+                        palette,
+                        "Status bar",
+                        "Line and column, character count, zoom, line endings and encoding".into(),
+                        toggler(self.config.window.status_bar)
+                            .size(24)
+                            .style(toggle_style)
+                            .on_toggle(Message::Status)
+                            .into()
+                    )
+                ]
+                .into(),
+            );
+            let paths = settings_group(
+                palette,
+                column![
+                    setting(
+                        palette,
+                        "Settings",
+                        self.paths.config_file().display().to_string(),
+                        space::horizontal().width(0).into()
+                    ),
+                    separator(),
+                    setting(
+                        palette,
+                        "Custom themes",
+                        format!("{}/  — TOML files with mode, background, foreground and optional accent, muted, selection, border, chrome, menu", self.paths.themes_dir().display()),
+                        space::horizontal().width(0).into()
+                    )
+                ]
+                .into(),
+            );
+            let contents = column![
+                text("Appearance").size(UI).font(bold_font()),
+                appearance,
+                space::vertical().height(12),
+                text("Text").size(UI).font(bold_font()),
+                text_settings,
+                space::vertical().height(12),
+                text("Configuration files").size(UI).font(bold_font()),
+                text("Edits made to these files, and Omarchy theme changes, apply immediately.")
+                    .size(UI)
+                    .style(move |theme| text::Style {
+                        color: Some(
+                            crate::style::Colors::new(theme, palette)
+                                .foreground
+                                .scale_alpha(0.55)
+                        )
+                    }),
+                paths
+            ]
+            .spacing(12);
+            let header = row![
+                space::horizontal().width(30),
+                text("Settings")
+                    .size(UI)
+                    .font(bold_font())
+                    .width(Fill)
+                    .align_x(iced::Center),
+                button(container(icon(Icon::Close)).center(Fill))
+                    .width(30)
+                    .height(30)
+                    .padding(0)
+                    .style(round)
+                    .on_press(Message::Dismiss)
+            ]
+            .align_y(iced::Center);
+            let panel = container(column![
+                container(header).padding([8, 10]),
+                scrollable(container(contents).padding(iced::Padding {
+                    top: 30.0,
+                    bottom: 24.0,
+                    left: 48.0,
+                    right: 48.0
+                }))
+                .direction(scrollable::Direction::Vertical(
+                    scrollable::Scrollbar::new().width(3).scroller_width(3)
+                ))
+                .height(Fill)
+            ])
+            .width(640)
+            .height(Fill)
+            .max_height(786)
+            .style(move |theme| {
+                let colors = crate::style::Colors::new(theme, palette);
+                container::Style {
+                    background: Some(colors.chrome.into()),
+                    border: iced::Border {
+                        color: colors.border.scale_alpha(0.5),
+                        width: 1.0,
+                        radius: 14.0.into(),
+                    },
+                    ..colors.panel()
+                }
+            });
+            let panel: Element<'_, Message> = if self.font_picker {
+                let filter = self.font_filter.to_lowercase();
+                let families = self
+                    .font_families
+                    .iter()
+                    .filter(|name| name.to_lowercase().contains(&filter))
+                    .fold(column![].spacing(2), |list, family| {
+                        list.push(
+                            button(text(family).size(UI))
+                                .width(Fill)
+                                .padding([8, 12])
+                                .style(flat)
+                                .on_press(Message::FontChosen(family.clone())),
+                        )
+                    });
+                container(
+                    column![
+                        row![
+                            button("Cancel").style(flat).on_press(Message::Dismiss),
+                            text("Select Font")
+                                .font(bold_font())
+                                .width(Fill)
+                                .align_x(iced::Center),
+                            button("Select").on_press(Message::ApplyFont)
+                        ]
+                        .align_y(iced::Center),
+                        text_input("Search fonts", &self.font_filter)
+                            .style(input_style)
+                            .padding(10)
+                            .on_input(Message::FontFilter),
+                        scrollable(families).height(Fill),
+                        text_input("Font family and size", &self.font_draft)
+                            .style(input_style)
+                            .padding(10)
+                            .on_input(Message::Font)
+                            .on_submit(Message::ApplyFont)
+                    ]
+                    .spacing(12),
+                )
+                .padding(16)
+                .width(640)
+                .height(Fill)
+                .max_height(650)
+                .style(move |theme| crate::style::Colors::new(theme, palette).panel())
+                .into()
+            } else {
+                panel.into()
+            };
+            return widget::stack![
+                base,
+                widget::opaque(container(panel).padding(24).center(Fill).style(|_| {
+                    container::Style {
+                        background: Some(iced::Color::BLACK.scale_alpha(0.4).into()),
+                        ..Default::default()
+                    }
+                }))
+            ]
+            .into();
         }
+
         if self.about_open {
             return modal(
                 base,
+                palette,
                 column![
                     text("RusTXT").size(30),
                     text(format!("Version {VERSION}")),
@@ -1271,113 +1916,345 @@ impl App {
             );
         }
         if let Some(menu) = self.menu {
-            let entries: Vec<(&str, Message)> = match menu {
-                Menu::File => vec![
-                    ("New tab                 Ctrl+N", Message::New),
-                    ("Open…                    Ctrl+O", Message::Open),
-                    ("Save                       Ctrl+S", Message::Save(false)),
-                    ("Save as…       Ctrl+Shift+S", Message::Save(true)),
-                    ("Save all          Ctrl+Alt+S", Message::SaveAll),
-                    ("Print…                     Ctrl+P", Message::Print),
-                    (
-                        "Close tab                Ctrl+W",
-                        Message::Close(self.active),
-                    ),
-                    ("Reopen closed  Ctrl+Shift+T", Message::ReopenLast),
-                    ("Discard changes and close…", Message::Discard),
-                    ("Exit", Message::Quit),
-                ],
-                Menu::Edit => vec![
-                    ("Undo                       Ctrl+Z", Message::Undo(false)),
-                    ("Redo               Ctrl+Shift+Z", Message::Undo(true)),
-                    ("Cut                          Ctrl+X", Message::Copy(true)),
-                    ("Copy                       Ctrl+C", Message::Copy(false)),
-                    ("Paste                      Ctrl+V", Message::Paste),
-                    ("Delete", Message::Delete),
-                    ("Select all                Ctrl+A", Message::SelectAll),
-                    ("Find…                     Ctrl+F", Message::Find(false)),
-                    ("Replace…               Ctrl+H", Message::Find(true)),
-                    ("Go to line…             Ctrl+G", Message::GoTo),
-                    ("Time and date                  F5", Message::Date),
-                ],
-                Menu::View => vec![
-                    ("Zoom in", Message::ZoomBy(10)),
-                    ("Zoom out", Message::ZoomBy(-10)),
-                    ("Reset zoom", Message::Zoom(100)),
-                    (
-                        "Toggle word wrap",
-                        Message::Wrap(!self.config.editor.word_wrap),
-                    ),
-                    (
-                        "Toggle status bar",
-                        Message::Status(!self.config.window.status_bar),
-                    ),
-                ],
-                Menu::Settings => vec![
-                    ("Preferences…          Ctrl+,", Message::Settings),
-                    ("About RusTXT", Message::About),
-                ],
+            let left = match menu {
+                Menu::File => 4.0,
+                Menu::Edit => 50.0,
+                Menu::View => 97.0,
+                _ => 151.0,
             };
-            let mut items = column![].spacing(2);
-            for (label, message) in entries {
-                let enabled = match &message {
-                    Message::Undo(false) => doc.can_undo(),
-                    Message::Undo(true) => doc.can_redo(),
-                    _ => true,
-                };
-                items = items.push(
-                    button(text(if cfg!(target_os = "macos") {
-                        label.replace("Ctrl", "Cmd")
-                    } else {
-                        label.to_owned()
-                    }))
-                    .on_press_maybe(enabled.then_some(message))
-                    .width(Fill)
-                    .style(button::text),
-                );
-            }
-            if menu == Menu::File && !self.closed.is_empty() {
-                items = items.push(text("Recently closed").size(12));
-                for closed in &self.closed {
-                    items = items.push(
-                        button(text(&closed.title))
-                            .on_press(Message::Reopen(closed.id.clone()))
-                            .width(Fill)
-                            .style(button::text),
-                    );
-                }
-            }
-            let panel = container(scrollable(items))
-                .padding(8)
-                .width(300)
-                .max_height(620)
-                .style(container::rounded_box);
-            return widget::stack![
+            let mut layers = widget::stack![
                 base,
                 widget::opaque(
                     widget::mouse_area(container(space::vertical()).width(Fill).height(Fill))
                         .on_press(Message::CloseMenu)
                 ),
-                container(widget::opaque(panel)).padding(iced::Padding {
-                    top: 38.0,
+                container(widget::opaque(self.menu_panel(menu))).padding(iced::Padding {
+                    top: 79.0,
+                    left,
                     right: 0.0,
-                    bottom: 0.0,
-                    left: match menu {
-                        Menu::File => 8.0,
-                        Menu::Edit => 58.0,
-                        Menu::View => 108.0,
-                        Menu::Settings => 160.0,
-                    }
+                    bottom: 0.0
                 })
-            ]
-            .into();
+            ];
+            if let Some(submenu) = self.submenu {
+                let (x, y) = match submenu {
+                    Menu::Recent => (left + 262.0, 149.0),
+                    _ => (left + 134.0, 79.0),
+                };
+                layers = layers.push(container(widget::opaque(self.menu_panel(submenu))).padding(
+                    iced::Padding {
+                        top: y,
+                        left: x,
+                        right: 0.0,
+                        bottom: 0.0,
+                    },
+                ));
+            }
+            return layers.into();
         }
+
         base
+    }
+    fn menu_panel(&self, menu: Menu) -> Element<'_, Message> {
+        let palette = self.ui_palette.as_ref();
+        let doc = self.doc();
+        let entries = match menu {
+            Menu::File => vec![
+                ("New tab", "Ctrl+N", Message::New),
+                ("Open…", "Ctrl+O", Message::Open),
+                ("Recently closed", "", Message::Submenu(Some(Menu::Recent))),
+                ("", "", Message::CloseMenu),
+                ("Save", "Ctrl+S", Message::Save(false)),
+                ("Save as…", "Shift+Ctrl+S", Message::Save(true)),
+                ("Save all", "Ctrl+Alt+S", Message::SaveAll),
+                ("", "", Message::CloseMenu),
+                ("Print…", "Ctrl+P", Message::Print),
+                ("", "", Message::CloseMenu),
+                ("Close tab", "Ctrl+W", Message::Close(self.active)),
+                ("Discard changes and close", "", Message::Discard),
+                ("Reopen closed tab", "Shift+Ctrl+T", Message::ReopenLast),
+                ("", "", Message::CloseMenu),
+                ("Exit", "Shift+Ctrl+W", Message::Quit),
+            ],
+            Menu::Edit => vec![
+                ("Undo", "Ctrl+Z", Message::Undo(false)),
+                ("Redo", "Ctrl+Y", Message::Undo(true)),
+                ("", "", Message::CloseMenu),
+                ("Cut", "Ctrl+X", Message::Copy(true)),
+                ("Copy", "Ctrl+C", Message::Copy(false)),
+                ("Paste", "Ctrl+V", Message::Paste),
+                ("Delete", "Delete", Message::Delete),
+                ("", "", Message::CloseMenu),
+                ("Find…", "Ctrl+F", Message::Find(false)),
+                ("Find next", "F3", Message::FindNext(false)),
+                ("Find previous", "Shift+F3", Message::FindNext(true)),
+                ("Replace…", "Ctrl+H", Message::Find(true)),
+                ("Go to…", "Ctrl+G", Message::GoTo),
+                ("", "", Message::CloseMenu),
+                ("Select all", "Ctrl+A", Message::SelectAll),
+                ("Time/Date", "F5", Message::Date),
+            ],
+            Menu::View => vec![
+                ("Zoom", "", Message::Submenu(Some(Menu::Zoom))),
+                ("", "", Message::CloseMenu),
+                (
+                    "Status bar",
+                    "",
+                    Message::Status(!self.config.window.status_bar),
+                ),
+                (
+                    "Word wrap",
+                    "",
+                    Message::Wrap(!self.config.editor.word_wrap),
+                ),
+            ],
+            Menu::Settings => vec![
+                ("Settings…", "Ctrl+,", Message::Settings),
+                ("", "", Message::CloseMenu),
+                ("About RusTXT", "", Message::About),
+            ],
+            Menu::Zoom => vec![
+                ("Zoom in", "Ctrl++", Message::ZoomBy(10)),
+                ("Zoom out", "Ctrl+-", Message::ZoomBy(-10)),
+                ("Restore default zoom", "Ctrl+0", Message::Zoom(100)),
+            ],
+            Menu::Recent => self
+                .closed
+                .iter()
+                .map(|closed| {
+                    (
+                        closed.title.as_str(),
+                        "",
+                        Message::Reopen(closed.id.clone()),
+                    )
+                })
+                .collect(),
+        };
+        let mut items = column![];
+        for (name, shortcut, message) in entries {
+            if name.is_empty() {
+                items = items.push(
+                    container(container(space::horizontal().height(1)).width(Fill).style(
+                        move |theme| {
+                            container::Style {
+                                background: Some(
+                                    crate::style::Colors::new(theme, palette)
+                                        .foreground
+                                        .scale_alpha(0.15)
+                                        .into(),
+                                ),
+                                ..Default::default()
+                            }
+                        },
+                    ))
+                    .padding([6, 0]),
+                );
+                continue;
+            }
+            let enabled = match &message {
+                Message::Undo(false) => doc.can_undo(),
+                Message::Undo(true) => doc.can_redo(),
+                Message::Copy(_) | Message::Delete => !doc.selected_range().is_empty(),
+                Message::ReopenLast | Message::Submenu(Some(Menu::Recent)) => {
+                    !self.closed.is_empty()
+                }
+                _ => true,
+            };
+            let mut contents = row![].spacing(8).align_y(iced::Center);
+            if menu == Menu::View {
+                let checked = match message {
+                    Message::Status(_) => self.config.window.status_bar,
+                    Message::Wrap(_) => self.config.editor.word_wrap,
+                    _ => false,
+                };
+                let check: Element<'_, Message> = if checked {
+                    icon(Icon::Check).into()
+                } else {
+                    space::horizontal().width(16).into()
+                };
+                contents = contents.push(check);
+            }
+            contents = contents
+                .push(text(name).size(UI).line_height(iced::Pixels(18.0)))
+                .push(space::horizontal());
+            if matches!(message, Message::Submenu(_)) {
+                contents = contents.push(icon(Icon::Right));
+            } else if !shortcut.is_empty() {
+                contents = contents.push(
+                    text(if cfg!(target_os = "macos") {
+                        shortcut.replace("Ctrl", "Cmd")
+                    } else {
+                        shortcut.into()
+                    })
+                    .size(UI)
+                    .line_height(iced::Pixels(18.0))
+                    .style(move |theme| text::Style {
+                        color: Some(
+                            crate::style::Colors::new(theme, palette)
+                                .foreground
+                                .scale_alpha(0.55),
+                        ),
+                    }),
+                );
+            }
+            let submenu = if let Message::Submenu(value) = message {
+                value
+            } else {
+                None
+            };
+            let item = button(contents)
+                .width(Fill)
+                .height(32)
+                .padding([7, 12])
+                .on_press_maybe(enabled.then_some(message))
+                .style(move |theme, status| {
+                    let mut style = crate::style::Colors::new(theme, palette).flat(status, false);
+                    if status == button::Status::Disabled {
+                        style.text_color = crate::style::Colors::new(theme, palette)
+                            .foreground
+                            .scale_alpha(0.5);
+                    }
+                    style.border.radius = 4.0.into();
+                    style
+                });
+            let item: Element<'_, Message> = if matches!(menu, Menu::Zoom | Menu::Recent) {
+                item.into()
+            } else {
+                widget::mouse_area(item)
+                    .on_enter(Message::Submenu(if enabled { submenu } else { None }))
+                    .into()
+            };
+            items = items.push(item);
+        }
+        if menu == Menu::Recent && self.closed.is_empty() {
+            items = items.push(text("No recently closed tabs").size(UI));
+        }
+        container(items)
+            .padding(6)
+            .width(match menu {
+                Menu::File => 264,
+                Menu::Edit => 204,
+                Menu::View => 136,
+                Menu::Settings => 212,
+                _ => 300,
+            })
+            .style(move |theme| {
+                let colors = crate::style::Colors::new(theme, palette);
+                container::Style {
+                    border: iced::Border {
+                        color: colors.foreground.scale_alpha(0.2),
+                        width: 1.0,
+                        radius: 8.0.into(),
+                    },
+                    ..colors.panel()
+                }
+            })
+            .into()
+    }
+}
+
+fn hint<'a>(
+    control: impl Into<Element<'a, Message>>,
+    description: &'a str,
+    palette: Option<&'a config::Palette>,
+) -> Element<'a, Message> {
+    widget::tooltip(
+        control,
+        text(description).size(UI),
+        widget::tooltip::Position::Bottom,
+    )
+    .delay(Duration::from_millis(450))
+    .gap(6)
+    .padding(8)
+    .style(move |theme| crate::style::Colors::new(theme, palette).tooltip())
+    .into()
+}
+
+fn setting<'a>(
+    palette: Option<&'a config::Palette>,
+    label: &'static str,
+    subtitle: String,
+    control: Element<'a, Message>,
+) -> widget::Container<'a, Message> {
+    let mut description = column![text(label).size(UI).line_height(iced::Pixels(18.0))].spacing(0);
+    if !subtitle.is_empty() {
+        description = description.push(
+            text(subtitle)
+                .size(CAPTION)
+                .line_height(iced::Pixels(15.0))
+                .style(move |theme| text::Style {
+                    color: Some(
+                        crate::style::Colors::new(theme, palette)
+                            .foreground
+                            .scale_alpha(0.55),
+                    ),
+                }),
+        );
+    }
+    container(
+        row![description.width(Fill), control]
+            .spacing(16)
+            .align_y(iced::Center),
+    )
+    .padding([10, 14])
+}
+fn settings_group<'a>(
+    palette: Option<&'a config::Palette>,
+    contents: Element<'a, Message>,
+) -> widget::Container<'a, Message> {
+    container(contents).width(Fill).style(move |theme| {
+        let colors = crate::style::Colors::new(theme, palette);
+        container::Style {
+            shadow: iced::Shadow::default(),
+            ..colors.panel()
+        }
+    })
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Choice {
+    value: String,
+    label: String,
+}
+impl std::fmt::Display for Choice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.label)
+    }
+}
+
+fn system_ui_font() -> Option<String> {
+    #[cfg(target_os = "linux")]
+    if let Ok(output) = std::process::Command::new("gsettings")
+        .args(["get", "org.gnome.desktop.interface", "font-name"])
+        .output()
+    {
+        if output.status.success() {
+            let description = String::from_utf8_lossy(&output.stdout)
+                .trim()
+                .trim_matches('\'')
+                .to_owned();
+            if let Some((family, _)) = description.rsplit_once(' ') {
+                return Some(family.to_owned());
+            }
+        }
+    }
+    system_font("sans-serif")
+}
+fn bold_font() -> Font {
+    static FAMILY: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    let family = FAMILY.get_or_init(|| system_ui_font().unwrap_or_default());
+    Font {
+        weight: iced::font::Weight::Bold,
+        ..if family.is_empty() {
+            Font::DEFAULT
+        } else {
+            Font::with_name(family)
+        }
     }
 }
 
 fn modal<'a>(
     base: Element<'a, Message>,
+    palette: Option<&'a config::Palette>,
     contents: impl Into<Element<'a, Message>>,
 ) -> Element<'a, Message> {
     widget::stack![
@@ -1387,7 +2264,7 @@ fn modal<'a>(
                 container(contents)
                     .padding(24)
                     .width(520)
-                    .style(container::rounded_box)
+                    .style(move |theme| crate::style::Colors::new(theme, palette).panel())
             )
             .center(Fill)
             .style(|_| container::Style {
@@ -1436,7 +2313,6 @@ fn shortcut(key: Key<&str>, modifiers: keyboard::Modifiers) -> Option<Message> {
         }
     }
     match key {
-        Key::Named(Named::Escape) => Some(Message::Dismiss),
         Key::Named(Named::F3) => Some(Message::FindNext(modifiers.shift())),
         Key::Named(Named::F5) => Some(Message::Date),
         Key::Named(Named::F10) => Some(Message::Menu(Menu::File)),
@@ -1446,5 +2322,31 @@ fn shortcut(key: Key<&str>, modifiers: keyboard::Modifiers) -> Option<Message> {
         Key::Character("v") if modifiers.alt() => Some(Message::Menu(Menu::View)),
         Key::Character("s") if modifiers.alt() => Some(Message::Menu(Menu::Settings)),
         _ => None,
+    }
+}
+
+/// Match GTK/fontconfig aliases on Linux; retain Iced's portable fallback elsewhere.
+fn system_font(alias: &str) -> Option<String> {
+    #[cfg(target_os = "linux")]
+    {
+        let output = std::process::Command::new("fc-match")
+            .args(["-f", "%{family}", alias])
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let name = String::from_utf8(output.stdout)
+            .ok()?
+            .split(',')
+            .next()?
+            .trim()
+            .to_owned();
+        (!name.is_empty()).then_some(name)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = alias;
+        None
     }
 }

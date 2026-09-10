@@ -5,11 +5,29 @@
 A small, recoverable plain text editor built with Rust and Iced for Linux,
 Windows, and macOS.
 
-This branch migrates the interface from GTK to Iced. `cargo run` and `make run`
-start the Iced frontend. The GTK frontend remains available for comparison with
-`cargo run -p rustxt`; the published 0.4.x packages still contain GTK.
+**RusTXT 0.5.0 is cross-platform:** Linux, Windows, and macOS use the same Iced
+interface and recovery engine. GTK is no longer required by the released app.
 
-![Iced editor with Arabic and English](docs/screenshots/iced-editor.png)
+## Download and install
+
+Get the packages from [the latest release](https://github.com/tsubaie/RusTXT/releases/latest).
+
+| Platform | Download and installation |
+|---|---|
+| Linux x86_64 | Extract the Linux `.tar.gz` and run `./install.sh`; requires glibc 2.35+ (Ubuntu 22.04+). |
+| Arch / Omarchy | `sudo pacman -U rustxt-*.pkg.tar.zst` |
+| Debian 13+ | `sudo apt install ./rustxt_*_amd64.deb` |
+| Fedora 42+ | `sudo dnf install ./rustxt-*.x86_64.rpm` |
+| Windows x86_64 | Extract the Windows ZIP and run `rustxt.exe`. No installer required. |
+| macOS Apple Silicon | Extract `arm64-macos.zip` and move RusTXT.app to Applications. |
+| macOS Intel | Extract `x86_64-macos.zip` and move RusTXT.app to Applications. |
+
+Verify downloads with the release's `SHA256SUMS`. macOS bundles are ad-hoc signed,
+not Apple-notarized; macOS may require **System Settings → Privacy & Security →
+Open Anyway**. Windows executables are unsigned. Linux file dialogs need an XDG
+desktop portal and a portal backend for your desktop.
+
+![RusTXT Iced editor](docs/screenshots/iced-editor.png)
 
 ## Features
 
@@ -25,7 +43,7 @@ start the Iced frontend. The GTK frontend remains available for comparison with
 
 The interface uses in-window menus. On macOS, command shortcuts use Cmd; tab
 cycling uses Ctrl+Tab. The About dialog links to the latest release rather than
-replacing the running executable with an older GTK release.
+updating the running executable automatically.
 
 ## Build and run
 
@@ -47,10 +65,12 @@ GtkSourceView, GPU, or browser runtime is required for the editor itself.
 The renderer is Iced's CPU-based `tiny-skia` backend.
 
 Windows uses the MSVC Rust toolchain and Visual Studio C++ build tools. macOS
-uses the Rust toolchain and Xcode command-line tools. The `Iced cross-platform`
-workflow tests/builds all three platforms and produces a Linux tarball, a Windows
-portable ZIP, and a macOS application bundle. These are development artifacts;
-the macOS bundle is ad-hoc signed, not notarized.
+uses the Rust toolchain and Xcode command-line tools. CI runs unit tests, renderer
+regressions, and release builds on Linux, Windows, Apple Silicon macOS, and Intel
+macOS. Real-window end-to-end editing, recovery, and hover tests run on Linux.
+
+The GTK frontend remains in the repository for comparison (`cargo run -p rustxt`).
+The default `cargo run` and `make run` commands start Iced.
 
 ## Existing notes and settings
 
@@ -81,7 +101,7 @@ make e2e          # Linux: Xvfb, xdotool, ImageMagick, Python 3
 crates/rustxt-core   recovery, safe file writes, configuration, themes
 crates/rustxt-iced   the cross-platform frontend
 crates/rustxt-gtk    the previous GTK frontend
-vendor/             pinned Iced editor fixes, documented in vendor/README.md
+vendor/             pinned Iced editor and renderer fixes, documented in vendor/README.md
 ```
 
 See [migration and footprint report](docs/iced-migration.md) for measurements,

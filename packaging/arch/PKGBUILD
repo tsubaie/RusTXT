@@ -1,13 +1,14 @@
 # Builds RusTXT from the checked-out repository (used by the release
 # workflow). For the AUR, see ../aur/rustxt-bin/PKGBUILD.
 pkgname=rustxt
-pkgver=0.4.1
+pkgver=0.5.0
 pkgrel=1
-pkgdesc="Dead simple, recoverable text editor built with GTK 4, libadwaita and GtkSourceView"
+pkgdesc="Dead simple, recoverable text editor built with Rust and Iced"
 arch=('x86_64' 'aarch64')
 url="https://github.com/tsubaie/RusTXT"
 license=('MIT')
-depends=('gtk4' 'libadwaita' 'gtksourceview5')
+depends=('libxkbcommon' 'wayland' 'libx11' 'fontconfig')
+optdepends=('xdg-desktop-portal: native file dialogs' 'noto-fonts: multilingual text')
 makedepends=('cargo')
 options=('!lto' '!strip')
 source=()
@@ -16,12 +17,12 @@ _repo="$startdir/../.."
 
 build() {
   cd "$_repo"
-  cargo build --release --locked -p rustxt
+  cargo build --release --locked -p rustxt-iced
 }
 
 package() {
   cd "$_repo"
-  install -Dm755 target/release/rustxt "$pkgdir/usr/bin/rustxt"
+  install -Dm755 target/release/rustxt-iced "$pkgdir/usr/bin/rustxt"
   install -Dm644 data/com.tsubaie.rustxt.desktop "$pkgdir/usr/share/applications/com.tsubaie.rustxt.desktop"
   install -Dm644 data/icons/com.tsubaie.rustxt.png "$pkgdir/usr/share/icons/hicolor/512x512/apps/com.tsubaie.rustxt.png"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"

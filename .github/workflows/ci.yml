@@ -4,7 +4,7 @@ name: CI
 # packages, so this only has to prove the tree formats, tests and builds.
 on:
   push:
-    branches: [main]
+    branches: [main, 'feat/iced-*']
     paths-ignore: ["**.md", "docs/**", "LICENSE"]
   pull_request:
     paths-ignore: ["**.md", "docs/**", "LICENSE"]
@@ -26,7 +26,7 @@ jobs:
     steps:
       # Xvfb and a font give the end-to-end tests a display to open windows on.
       - name: Install toolchain, GTK and a headless display
-        run: pacman -Syu --noconfirm rust gtk4 libadwaita gtksourceview5 git xorg-server-xvfb ttf-dejavu
+        run: pacman -Syu --noconfirm rust gtk4 libadwaita gtksourceview5 libxkbcommon wayland fontconfig git xorg-server-xvfb ttf-dejavu
       - uses: actions/checkout@v4
       # Shared with the release workflow's Arch job: same image, same compiler.
       - name: Cache cargo registry and build output
@@ -44,4 +44,4 @@ jobs:
           GDK_BACKEND: x11
           GSK_RENDERER: cairo
       - name: Release build
-        run: cargo build --release --locked -p rustxt
+        run: cargo build --release --locked -p rustxt-iced

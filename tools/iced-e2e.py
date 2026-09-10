@@ -87,10 +87,12 @@ with tempfile.TemporaryDirectory(prefix='rustxt-iced-e2e-') as temp:
         wait_for(lambda: active_text().startswith('Recovery'), 'Close tab failed')
         key('ctrl+shift+t')
         wait_for(lambda: active_text() == 'A second unsaved note', 'Reopen failed')
-        key('ctrl+h')
+        key('ctrl+f')
         type_text('second')
         key('Return')
+        key('ctrl+h')
         type_text('restored')
+        key('Return')
         wait_for(lambda: active_text() == 'A restored unsaved note', 'Find selection/replacement failed')
         key('Escape')
         sample = root / 'arabic.txt'

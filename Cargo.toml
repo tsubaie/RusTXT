@@ -4,7 +4,7 @@ members = ["crates/rustxt-core", "crates/rustxt-gtk", "crates/rustxt-iced"]
 default-members = ["crates/rustxt-iced"]
 
 [workspace.package]
-version = "0.4.1"
+version = "0.5.0"
 edition = "2021"
 license = "MIT"
 description = "A dead simple, recoverable plain text editor"
@@ -18,3 +18,4 @@ strip = true
 [patch.crates-io]
 iced_graphics = { path = "vendor/iced_graphics" }
 iced_widget = { path = "vendor/iced_widget" }
+iced_tiny_skia = { path = "vendor/iced_tiny_skia" }

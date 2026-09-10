@@ -4,6 +4,8 @@ name: Release
 on:
   push:
     tags: ["v*"]
+    branches: ["feat/iced-cross-platform"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -16,26 +18,32 @@ jobs:
   validate:
     name: Validate release version
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - name: Tag must match Cargo package version
+        id: version
         run: |
           set -eu
           tag_version="${GITHUB_REF_NAME#v}"
-          cargo_version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "rustxt") | .version')"
+          cargo_version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "rustxt-iced") | .version')"
+          echo "version=$cargo_version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
           test "$tag_version" = "$cargo_version" || {
             echo "Tag version $tag_version does not match Cargo version $cargo_version" >&2
             exit 1
           }
+          fi
 
   arch:
-    name: Arch package and tarball
+    name: Arch package
     runs-on: ubuntu-latest
     needs: validate
     container: archlinux:base-devel
     steps:
-      - name: Install toolchain and GTK
-        run: pacman -Syu --noconfirm rust gtk4 libadwaita gtksourceview5 git sudo
+      - name: Install toolchain and desktop libraries
+        run: pacman -Syu --noconfirm rust libxkbcommon wayland libx11 fontconfig git sudo
       - uses: actions/checkout@v4
       # Restores the cache CI keeps warm on main, so this is usually a link step.
       - name: Cache cargo registry and build output
@@ -44,9 +52,9 @@ jobs:
           shared-key: arch-linux
           cache-on-failure: true
       - name: Version from tag
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+        run: echo "VERSION=${{ needs.validate.outputs.version }}" >> "$GITHUB_ENV"
       - name: Build
-        run: cargo build --release --locked -p rustxt
+        run: cargo build --release --locked -p rustxt-iced
       # makepkg refuses to run as root and would rebuild from scratch in its own
       # cargo home, so build above with the cache and let it only package (-R).
       - name: Package for Arch
@@ -56,17 +64,8 @@ jobs:
           sed -i "s/^pkgver=.*/pkgver=$VERSION/" packaging/arch/PKGBUILD
           cd packaging/arch
           sudo -u builder makepkg -Rf --noconfirm
-      - name: Build tarball
-        run: |
-          set -eu
-          dir="rustxt-$VERSION"
-          mkdir -p "dist/$dir"
-          cp target/release/rustxt data/com.tsubaie.rustxt.desktop data/icons/com.tsubaie.rustxt.png LICENSE README.md packaging/tarball/install.sh "dist/$dir/"
-          tar -C dist -czf "dist/rustxt-$VERSION-x86_64-linux.tar.gz" "$dir"
-          rm -r "dist/$dir"
-          mv packaging/arch/*.pkg.tar.zst dist/
-          sha=$(sha256sum "dist/rustxt-$VERSION-x86_64-linux.tar.gz" | cut -d' ' -f1)
-          sed -e "s/@VERSION@/$VERSION/" -e "s/@SHA256@/$sha/" packaging/aur/rustxt-bin/PKGBUILD > dist/PKGBUILD
+      - name: Collect Arch package
+        run: mkdir -p dist && cp packaging/arch/*.pkg.tar.zst dist/
       - uses: actions/upload-artifact@v4
         with:
           name: arch
@@ -82,7 +81,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends build-essential curl ca-certificates pkg-config dpkg-dev git \
-            libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev
+            libxkbcommon-dev libwayland-dev libfontconfig1-dev libx11-dev libxrandr-dev libxi-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/checkout@v4
       - name: Cache cargo registry, build output and cargo-deb
@@ -96,7 +95,7 @@ jobs:
         run: cargo binstall -y --locked cargo-deb
       - name: Build .deb
         run: |
-          cargo deb -p rustxt --locked
+          cargo deb -p rustxt-iced --locked
           mkdir -p dist && cp target/debian/*.deb dist/
       - uses: actions/upload-artifact@v4
         with:
@@ -110,7 +109,7 @@ jobs:
     container: fedora:42
     steps:
       - name: Install build dependencies
-        run: dnf install -y gcc pkgconf-pkg-config curl git rpm-build gtk4-devel libadwaita-devel gtksourceview5-devel
+        run: dnf install -y gcc pkgconf-pkg-config curl git rpm-build libxkbcommon-devel wayland-devel fontconfig-devel libX11-devel libXrandr-devel libXi-devel
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/checkout@v4
       - name: Cache cargo registry, build output and cargo-generate-rpm
@@ -122,38 +121,113 @@ jobs:
         run: cargo binstall -y --locked cargo-generate-rpm
       - name: Build .rpm
         run: |
-          cargo build --release --locked -p rustxt
-          cargo generate-rpm -p crates/rustxt-gtk
+          cargo build --release --locked -p rustxt-iced
+          cargo generate-rpm -p crates/rustxt-iced
           mkdir -p dist && cp target/generate-rpm/*.rpm dist/
       - uses: actions/upload-artifact@v4
         with:
           name: rpm
           path: dist/*
 
+  native:
+    name: Native ${{ matrix.os }}
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-15, macos-15-intel, windows-2022]
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.validate.outputs.version }}
+      MACOSX_DEPLOYMENT_TARGET: "12.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libwayland-dev libfontconfig1-dev libx11-dev libxrandr-dev libxi-dev xvfb xdotool imagemagick fonts-noto-core
+      - name: Tests
+        run: cargo test --locked -p rustxt-core -p rustxt-iced
+      - name: Renderer regression
+        run: cargo test --locked -p iced_tiny_skia --lib
+      - name: Build Iced
+        run: cargo build --release --locked -p rustxt-iced
+      - name: Native startup smoke test
+        if: runner.os != 'Linux'
+        run: python tools/iced-startup-smoke.py target/release
+      - name: Linux end-to-end tests
+        if: runner.os == 'Linux'
+        run: |
+          xvfb-run -a -s '-screen 0 1280x1024x24' python3 tools/iced-e2e.py target/release/rustxt-iced target/iced-e2e
+          xvfb-run -a -s '-screen 0 1600x1200x24' python3 tools/iced-rendering-e2e.py target/release/rustxt-iced target/iced-rendering-e2e
+      - name: Linux tarball
+        if: runner.os == 'Linux'
+        run: |
+          dir="rustxt-$VERSION"
+          mkdir -p "dist/$dir"
+          cp target/release/rustxt-iced "dist/$dir/rustxt"
+          cp data/com.tsubaie.rustxt.desktop data/icons/com.tsubaie.rustxt.png LICENSE README.md packaging/tarball/install.sh "dist/$dir/"
+          tar -C dist -czf "dist/rustxt-$VERSION-x86_64-linux.tar.gz" "$dir"
+      - name: macOS application
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p dist/RusTXT.app/Contents/MacOS dist/RusTXT.app/Contents/Resources
+          cp target/release/rustxt-iced dist/RusTXT.app/Contents/MacOS/rustxt
+          cp packaging/macos/Info.plist dist/RusTXT.app/Contents/
+          mkdir -p target/RusTXT.iconset
+          for size in 16 32 128 256 512; do
+            sips -z "$size" "$size" data/icons/com.tsubaie.rustxt.png --out "target/RusTXT.iconset/icon_${size}x${size}.png"
+          done
+          iconutil -c icns target/RusTXT.iconset -o dist/RusTXT.app/Contents/Resources/RusTXT.icns
+          codesign --force --deep --sign - dist/RusTXT.app
+          codesign --verify --deep --strict dist/RusTXT.app
+          ditto -c -k --sequesterRsrc --keepParent dist/RusTXT.app "dist/rustxt-$VERSION-$(uname -m)-macos.zip"
+      - name: Windows portable application
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = $env:VERSION
+          New-Item -ItemType Directory -Force dist/rustxt
+          Copy-Item target/release/rustxt-iced.exe dist/rustxt/rustxt.exe
+          Copy-Item LICENSE,README.md dist/rustxt/
+          Compress-Archive dist/rustxt/* "dist/rustxt-$version-x86_64-windows.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.os }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+      - uses: actions/upload-artifact@v4
+        if: failure() && runner.os == 'Linux'
+        with:
+          name: release-e2e-failure
+          path: |
+            target/iced-e2e
+            target/iced-rendering-e2e
+
   release:
     name: Publish GitHub Release
-    needs: [arch, deb, rpm]
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [arch, deb, rpm, native]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
+      - name: AUR recipe
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sha=$(sha256sum "dist/rustxt-$VERSION-x86_64-linux.tar.gz" | cut -d' ' -f1)
+          sed -e "s/@VERSION@/$VERSION/" -e "s/@SHA256@/$sha/" packaging/aur/rustxt-bin/PKGBUILD > dist/PKGBUILD
       - name: Checksums
         run: cd dist && sha256sum * > SHA256SUMS && ls -la
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
           generate_release_notes: true
-          body: |
-            ## Install
-
-            | Distro | Command |
-            |---|---|
-            | Arch / Omarchy | `sudo pacman -U rustxt-*.pkg.tar.zst` |
-            | Debian 13+ / Ubuntu 25.04+ | `sudo apt install ./rustxt_*_amd64.deb` |
-            | Fedora 42+ | `sudo dnf install ./rustxt-*.x86_64.rpm` |
-            | Any Linux | extract the `.tar.gz` and run `./install.sh` |
-
-            RusTXT needs GTK 4.16, libadwaita 1.6 and GtkSourceView 5 or newer.
-            Verify downloads against `SHA256SUMS`.
+          body_path: docs/releases/0.5.0.md

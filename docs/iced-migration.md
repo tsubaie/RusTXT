@@ -3,7 +3,7 @@
 Measured on 2026-09-10, branch `feat/iced-cross-platform`, rebased onto
 `origin/main` at `8320c53` (the merged 0.4.1 hardening changes).
 
-## Result
+## Initial migration result
 
 The default frontend is now `rustxt-iced`. The GTK crate is retained as an
 explicit comparison target. Both use `rustxt-core` and the existing recovery
@@ -46,7 +46,7 @@ or total system memory including the display server/desktop portal.
 Raw results, including binary SHA-256 hashes:
 [GTK](benchmarks/gtk-linux.json) and [Iced](benchmarks/iced-linux.json).
 The preserved GTK executable is in `target/footprint/rustxt-gtk` in this workspace;
-the new executable is `target/release/rustxt-iced`.
+the current executable is `target/release/rustxt-iced`; its follow-up measurements are below.
 
 To repeat on Linux:
 
@@ -58,6 +58,28 @@ xvfb-run -a -s '-screen 0 1280x1024x24' python3 tools/measure-footprint.py targe
 These measurements establish the change on this Linux software-rendered workload.
 They do not predict Windows/macOS memory, hardware-rendered GTK memory, or the
 cost of hours of editing with large undo histories.
+
+## UI and renderer follow-up
+
+The updated build restores the tab/menu arrangement, desktop UI font, vector
+controls, grouped Settings rows, font selection, and Find/Replace layout and
+focus behavior. It is compared against the installed `/usr/bin/rustxt` 0.4.1.
+Exact pixel parity is not claimed: native GTK font dialogs, some widget metrics,
+text rasterization and search highlighting still differ.
+
+A software-renderer bug caused hovering over menus and Settings to repeatedly
+paint unclipped shadows over unchanged pixels. The vendored fix clips shadows
+and limits their rasterization to the damaged area. A regression test failed
+before the fix and passes afterward at 100%, 125%, 150%, and 200% scale; a real
+window test checks 33 hover redraws at 125%. See `vendor/README.md`.
+
+At the renderer-fix snapshot, the release binary was **17,272,304 bytes
+(16.47 MiB)**. Median RSS is **23.61 MiB empty**
+and **30.74 MiB with the ~1 MiB file**, compared with the original GTK
+143.35 / 149.39 MiB. The initial table above describes the earlier binary.
+[Follow-up raw measurements](benchmarks/iced-ui-linux.json) include that snapshot’s
+binary hash. Other Iced windows were open during portions of this follow-up,
+so its PSS/USS must not be compared with the isolated initial measurements.
 
 ## Implementation
 
