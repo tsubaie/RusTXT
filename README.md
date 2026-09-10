@@ -25,7 +25,9 @@ Get the packages from [the latest release](https://github.com/tsubaie/RusTXT/rel
 Verify downloads with the release's `SHA256SUMS`. macOS bundles are ad-hoc signed,
 not Apple-notarized; macOS may require **System Settings → Privacy & Security →
 Open Anyway**. Windows executables are unsigned. Linux file dialogs need an XDG
-desktop portal and a portal backend for your desktop.
+desktop portal and a portal backend for your desktop. The tarball also needs
+libxkbcommon (including its X11 library), Wayland, X11/Xcursor/Xi, and Fontconfig
+runtime libraries; native Linux packages install those dependencies automatically.
 
 ![RusTXT Iced editor](docs/screenshots/iced-editor.png)
 
@@ -57,7 +59,7 @@ cargo run --release -p rustxt-iced -- notes.txt
 Linux needs the usual X11/Wayland and keyboard libraries. On Debian/Ubuntu:
 
 ```sh
-sudo apt install build-essential pkg-config libxkbcommon-dev libwayland-dev libfontconfig1-dev libx11-dev libxrandr-dev libxi-dev
+sudo apt install build-essential pkg-config libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libfontconfig1-dev libx11-dev libx11-xcb1 libxcursor1 libxrandr-dev libxi-dev
 ```
 
 File dialogs on Linux use the desktop's XDG portal. No GTK, libadwaita,

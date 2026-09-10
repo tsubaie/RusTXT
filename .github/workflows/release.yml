@@ -208,10 +208,41 @@ jobs:
             target/iced-e2e
             target/iced-rendering-e2e
 
+  package-smoke:
+    name: Installed package on ${{ matrix.package }}
+    needs: [arch, deb, rpm]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: arch
+            image: archlinux:base
+            install: pacman -Syu --noconfirm xorg-server-xvfb xorg-xauth python ttf-dejavu && pacman -U --noconfirm /packages/*.pkg.tar.zst
+          - package: deb
+            image: debian:trixie
+            install: apt-get update && apt-get install -y --no-install-recommends xvfb xauth python3 fonts-dejavu-core /packages/*.deb
+          - package: rpm
+            image: fedora:42
+            install: dnf install -y xorg-x11-server-Xvfb xorg-x11-xauth python3 dejavu-sans-fonts /packages/*.rpm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.package }}
+          path: packages
+      - name: Install and start packaged application
+        env:
+          IMAGE: ${{ matrix.image }}
+          INSTALL: ${{ matrix.install }}
+        run: |
+          docker run --rm -v "$PWD/packages:/packages:ro" -v "$PWD/tools:/tests:ro" "$IMAGE" \
+            bash -c "$INSTALL && xvfb-run -a python3 /tests/iced-startup-smoke.py /usr/bin/rustxt"
+
   release:
     name: Publish GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [arch, deb, rpm, native]
+    needs: [arch, deb, rpm, native, package-smoke]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

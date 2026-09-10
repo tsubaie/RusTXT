@@ -33,7 +33,8 @@ RusTXT is a dead simple, recoverable plain text editor: tabs that remember where
 crash, find and replace that stays out of the way. Built with Rust and Iced for Linux, Windows and macOS."""
 section = "editors"
 priority = "optional"
-depends = "$auto"
+depends = "$auto, libxkbcommon0, libxkbcommon-x11-0, libwayland-client0, libx11-6, libx11-xcb1, libxcursor1, libxi6, fontconfig"
+recommends = "xdg-desktop-portal"
 assets = [
   ["target/release/rustxt-iced", "usr/bin/rustxt", "755"],
   ["../../data/com.tsubaie.rustxt.desktop", "usr/share/applications/", "644"],
@@ -54,3 +55,16 @@ assets = [
   { source = "LICENSE", dest = "/usr/share/licenses/rustxt/LICENSE", mode = "644", doc = true },
   { source = "README.md", dest = "/usr/share/doc/rustxt/README.md", mode = "644", doc = true },
 ]
+
+# These libraries are loaded dynamically, so automatic ELF scanning misses them.
+[package.metadata.generate-rpm.requires]
+libxkbcommon = "*"
+libxkbcommon-x11 = "*"
+wayland-libs = "*"
+libX11 = "*"
+libXcursor = "*"
+libXi = "*"
+fontconfig = "*"
+
+[package.metadata.generate-rpm.recommends]
+xdg-desktop-portal = "*"
