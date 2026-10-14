@@ -213,6 +213,20 @@ impl App {
     }
 }
 
+/// Editor-level bindings that Iced does not provide by default: Tab inserts a
+/// tab character instead of moving keyboard focus, as in any plain text editor.
+pub(super) fn editor_binding(
+    key: Key<&str>,
+    modifiers: keyboard::Modifiers,
+) -> Option<iced::widget::text_editor::Binding<Message>> {
+    match key {
+        Key::Named(Named::Tab) if !modifiers.command() && !modifiers.alt() => {
+            Some(iced::widget::text_editor::Binding::Insert('\t'))
+        }
+        _ => None,
+    }
+}
+
 pub(super) fn shortcut(key: Key<&str>, modifiers: keyboard::Modifiers) -> Option<Message> {
     if modifiers.command() {
         if let Key::Character(character) = key {
@@ -265,6 +279,20 @@ pub(super) fn shortcut(key: Key<&str>, modifiers: keyboard::Modifiers) -> Option
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tab_inserts_a_tab_character() {
+        use iced::widget::text_editor::Binding;
+        assert!(matches!(
+            editor_binding(Key::Named(Named::Tab), keyboard::Modifiers::empty()),
+            Some(Binding::Insert('\t'))
+        ));
+        assert!(matches!(
+            editor_binding(Key::Named(Named::Tab), keyboard::Modifiers::SHIFT),
+            Some(Binding::Insert('\t'))
+        ));
+        assert!(editor_binding(Key::Named(Named::Tab), keyboard::Modifiers::COMMAND).is_none());
+    }
 
     #[test]
     fn shortcuts_map_quit_and_find_next() {

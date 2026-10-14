@@ -86,6 +86,17 @@ def config_zoom(root):
     return int(match.group(1)) if match else None
 
 
+def merge_bands(bands, gap):
+    """Join ink bands separated by at most `gap` rows."""
+    merged = []
+    for start, end in bands:
+        if merged and start - merged[-1][1] <= gap:
+            merged[-1] = (merged[-1][0], end)
+        else:
+            merged.append((start, end))
+    return merged
+
+
 def dialog_height(h, dialog_shot, dismissed_shot):
     """Height in px of the modal panel in `dialog_shot`: within the editor
     rows (scanned on `dismissed_shot`, which has no overlay) take the middle
@@ -98,8 +109,13 @@ def dialog_height(h, dialog_shot, dismissed_shot):
     # The panel is only ~10% per channel lighter than the darkened editor, so
     # the default 15% ink fuzz would see just its text; 5% sees the panel.
     mask = InkMask.load(dialog_shot, darkened, crop=(width // 3, top, width // 3, height), fuzz='5%')
-    bands = mask.ink_bands()
-    assert len(bands) == 1, f'Expected one solid dialog band in the editor centre, found {bands}'
+    # The panel's 1 px border/shadow edge can register as a separate hairline
+    # band on some renderers (seen on Ubuntu's ImageMagick 6); merge bands that
+    # are within 3 px of each other and keep the tallest.
+    bands = merge_bands(mask.ink_bands(), gap=3)
+    assert bands, 'Expected a dialog band in the editor centre, found none'
+    assert sum(1 for a, b in bands if b - a >= 20) == 1, f'Expected one solid dialog band in the editor centre, found {bands}'
+    bands = [max(bands, key=lambda band: band[1] - band[0])]
     return bands[0][1] - bands[0][0] + 1
 
 

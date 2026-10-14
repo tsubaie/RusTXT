@@ -220,6 +220,7 @@ impl App {
             .key_binding(|press| {
                 shortcut(press.key.as_ref(), press.modifiers)
                     .map(text_editor::Binding::Custom)
+                    .or_else(|| super::menus::editor_binding(press.key.as_ref(), press.modifiers))
                     .or_else(|| text_editor::Binding::from_key_press(press))
             });
         let editor: Element<'_, Message> = if self.find_open {

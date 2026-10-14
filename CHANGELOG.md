@@ -43,6 +43,11 @@ accompany each GitHub Release live in `docs/releases/<version>.md`.
 
 ### Fixed
 
+- Tab inserts a tab character instead of moving keyboard focus.
+- Deleting, pasting or replacing text that spans hundreds of lines (such as
+  select-all then Delete, or Replace all in a large file) took seconds to
+  minutes because the editor removed lines one at a time; the buffer is now
+  rebuilt in one pass. A 4.6 MB select-all delete went from 63 s to 1 s.
 - Saving no longer replaces a read-only file through the atomic rename; it is
   refused with a message suggesting Save As.
 - Zooming with the keyboard or wheel was reverted by the configuration watcher

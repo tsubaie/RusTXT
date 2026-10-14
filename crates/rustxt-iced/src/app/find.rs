@@ -99,7 +99,7 @@ impl App {
                             self.doc_mut().replace(0..len, &next);
                             self.refresh_search();
                         }
-                        Err(error) => self.error = Some(error),
+                        Err(error) => self.report(Err(error)),
                     }
                 }
             }

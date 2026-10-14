@@ -58,6 +58,9 @@ struct History {
 /// Viewport as cosmic-text reports it: first visible line plus pixel offsets.
 type Scroll = (usize, f32, f32);
 
+/// Edits touching more lines than this bypass COSMIC's per-line editing.
+const BULK_LINES: usize = 500;
+
 fn history_key(id: &str) -> String {
     format!("iced-history:{id}")
 }
@@ -224,6 +227,10 @@ impl Document {
         self.restore_scroll = None;
         self.view_dirty = true;
         let action = normalize_action(action);
+        if let Some((range, insert)) = self.bulk_edit(&action) {
+            self.apply_bulk(range, &insert, None);
+            return;
+        }
         let edits = action.is_edit();
         let before = self.content.cursor();
         self.content.perform(action);
@@ -240,6 +247,51 @@ impl Document {
                 self.changed();
             }
         }
+        self.capture_cursor();
+    }
+
+    /// An edit that removes or inserts more than `BULK_LINES` lines. COSMIC
+    /// removes and inserts lines one at a time, which is quadratic in the
+    /// number of lines, so such edits are applied to the string instead and
+    /// the buffer is rebuilt from it in linear time.
+    fn bulk_edit(&self, action: &Action) -> Option<(Range<usize>, String)> {
+        let insert = match action {
+            Action::Edit(Edit::Paste(text)) => text.to_string(),
+            Action::Edit(Edit::Delete) | Action::Edit(Edit::Backspace) => String::new(),
+            _ => return None,
+        };
+        let range = self.selected_range();
+        if range.is_empty() && insert.is_empty() {
+            return None;
+        }
+        let lines =
+            self.state.content[range.clone()].matches('\n').count() + insert.matches('\n').count();
+        (lines > BULK_LINES).then_some((range, insert))
+    }
+
+    /// Replace `range` with `insert` by rebuilding the editor buffer, keep the
+    /// viewport, and record the change. `cursor` overrides the caret, which
+    /// otherwise lands after the inserted text.
+    fn apply_bulk(&mut self, range: Range<usize>, insert: &str, cursor: Option<Cursor>) {
+        let before = self.content.cursor();
+        let scroll = self.scroll();
+        let mut next = self.state.content.clone();
+        next.replace_range(range.clone(), insert);
+        self.content = Content::with_text(&next);
+        let cursor = cursor.unwrap_or(Cursor {
+            position: byte_position(&next, range.start + insert.len()),
+            selection: None,
+        });
+        self.content.move_to(cursor);
+        self.record(change(
+            &self.state.content,
+            &next,
+            before,
+            self.content.cursor(),
+        ));
+        self.state.content = next;
+        self.restore_scroll = Some(scroll);
+        self.changed();
         self.capture_cursor();
     }
 
@@ -316,15 +368,25 @@ impl Document {
             self.redo.clear();
             return;
         }
-        // Apply the inverse edit in place so the laid-out buffer and viewport survive.
-        self.restore_scroll = None;
-        self.select(change.start..change.start + remove.len());
-        self.content
-            .perform(Action::Edit(Edit::Paste(Arc::new(insert.clone()))));
-        self.content.move_to(cursor);
-        self.state
-            .content
-            .replace_range(change.start..change.start + remove.len(), insert);
+        let range = change.start..change.start + remove.len();
+        if remove.matches('\n').count() + insert.matches('\n').count() > BULK_LINES {
+            // Rebuilding is linear; COSMIC's line-by-line edit is quadratic.
+            let scroll = self.scroll();
+            let mut next = self.state.content.clone();
+            next.replace_range(range, insert);
+            self.content = Content::with_text(&next);
+            self.content.move_to(cursor);
+            self.state.content = next;
+            self.restore_scroll = Some(scroll);
+        } else {
+            // Apply the inverse edit in place so the laid-out buffer and viewport survive.
+            self.restore_scroll = None;
+            self.select(range.clone());
+            self.content
+                .perform(Action::Edit(Edit::Paste(Arc::new(insert.clone()))));
+            self.content.move_to(cursor);
+            self.state.content.replace_range(range, insert);
+        }
         if redo {
             self.undo.push(change);
         } else {
@@ -561,6 +623,29 @@ mod tests {
         doc.undo(false);
         assert!(doc.state.dirty);
     }
+    #[test]
+    fn bulk_delete_and_undo_round_trip_through_a_rebuild() {
+        let text: String = (0..2000).map(|i| format!("line {i}\n")).collect();
+        let mut doc = doc(&text);
+        doc.select(0..text.len());
+        doc.action(Action::Edit(Edit::Delete));
+        assert_eq!(doc.state.content, "");
+        assert_eq!(doc.content.text(), "");
+        doc.undo(false);
+        assert_eq!(doc.state.content, text);
+        assert_eq!(doc.content.text(), text);
+        doc.undo(true);
+        assert_eq!(doc.state.content, "");
+        let pasted: String = (0..1000).map(|i| format!("p{i}\n")).collect();
+        doc.action(Action::Edit(Edit::Paste(Arc::new(pasted.clone()))));
+        assert_eq!(doc.state.content, pasted);
+        assert_eq!(doc.content.text(), pasted);
+        assert_eq!(
+            byte_offset(&doc.state.content, doc.content.cursor().position),
+            pasted.len()
+        );
+    }
+
     #[test]
     fn typing_coalesces_into_word_steps() {
         let mut doc = doc("");
