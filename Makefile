@@ -22,9 +22,6 @@ e2e: build
 	xvfb-run -a -s '-screen 0 1280x1024x24' python3 tools/iced-e2e.py target/release/rustxt-iced target/iced-e2e
 	xvfb-run -a -s '-screen 0 1600x1200x24' python3 tools/iced-rendering-e2e.py target/release/rustxt-iced target/iced-rendering-e2e
 
-legacy-e2e:
-	cargo test -p rustxt --locked --test e2e
-
 build:
 	cargo build --release --locked -p rustxt-iced
 

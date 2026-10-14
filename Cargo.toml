@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/rustxt-core", "crates/rustxt-gtk", "crates/rustxt-iced"]
+members = ["crates/rustxt-core", "crates/rustxt-iced"]
 default-members = ["crates/rustxt-iced"]
 
 [workspace.package]
