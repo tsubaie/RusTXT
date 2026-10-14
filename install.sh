@@ -10,6 +10,7 @@
 #
 #   RUSTXT_VERSION=0.2.1    install that release instead of the latest
 #   RUSTXT_INSTALL=tarball  use the tarball even when a package would fit
+#   PREFIX=/opt/rustxt      where the tarball install goes (default ~/.local)
 set -eu
 
 repo="tsubaie/RusTXT"
@@ -24,8 +25,19 @@ fetch() {
   fi
 }
 
-[ "$(uname -s)" = Linux ] || fail "prebuilt packages are Linux only. See https://github.com/$repo#build-from-source"
-[ "$(uname -m)" = x86_64 ] || fail "prebuilt packages are x86_64 only. See https://github.com/$repo#build-from-source"
+# The release JSON is pretty-printed one key per line; python3 parses it
+# properly when present, otherwise sed takes the first top-level tag_name.
+latest_version() {
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -I -c 'import json, sys
+tag = json.load(open(sys.argv[1]))["tag_name"]
+print(tag[1:] if tag.startswith("v") else tag)' "$1" 2>/dev/null && return 0
+  fi
+  sed -n 's/^[[:space:]]*"tag_name"[[:space:]]*:[[:space:]]*"v\{0,1\}\([^"]*\)".*/\1/p' "$1" | head -n 1
+}
+
+[ "$(uname -s)" = Linux ] || fail "prebuilt packages are Linux only. See https://github.com/$repo/blob/main/README.md#build-and-run"
+[ "$(uname -m)" = x86_64 ] || fail "prebuilt packages are x86_64 only. See https://github.com/$repo/blob/main/README.md#build-and-run"
 
 if [ "$(id -u)" -eq 0 ]; then sudo=""
 elif command -v sudo >/dev/null 2>&1; then sudo=sudo
@@ -38,7 +50,7 @@ trap 'rm -rf "$tmp"' EXIT INT TERM
 version="${RUSTXT_VERSION:-}"
 if [ -z "$version" ]; then
   fetch "https://api.github.com/repos/$repo/releases/latest" "$tmp/release.json"
-  version="$(sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' "$tmp/release.json" | head -n 1)"
+  version="$(latest_version "$tmp/release.json")"
   [ -n "$version" ] || fail "could not work out the latest release"
 fi
 base="https://github.com/$repo/releases/download/v$version"
@@ -77,7 +89,7 @@ case "$kind" in
   pacman)  $sudo pacman -U --noconfirm "$tmp/$file" ;;
   deb)     $sudo apt-get install -y "$tmp/$file" ;;
   rpm)     $sudo dnf install -y "$tmp/$file" ;;
-  tarball) tar -C "$tmp" -xzf "$tmp/$file" && sh "$tmp/rustxt-$version/install.sh" ;;
+  tarball) tar -C "$tmp" -xzf "$tmp/$file" && PREFIX="${PREFIX:-$HOME/.local}" sh "$tmp/rustxt-$version/install.sh" ;;
 esac
 
 say ""

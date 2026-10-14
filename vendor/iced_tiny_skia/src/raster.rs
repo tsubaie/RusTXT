@@ -18,12 +18,17 @@ impl Pipeline {
         }
     }
 
-    pub fn load(&self, handle: &raster::Handle) -> Result<raster::Allocation, raster::Error> {
+    pub fn load(
+        &self,
+        handle: &raster::Handle,
+    ) -> Result<raster::Allocation, raster::Error> {
         let mut cache = self.cache.borrow_mut();
         let image = cache.allocate(handle)?;
 
         #[allow(unsafe_code)]
-        Ok(unsafe { raster::allocate(handle, Size::new(image.width(), image.height())) })
+        Ok(unsafe {
+            raster::allocate(handle, Size::new(image.width(), image.height()))
+        })
     }
 
     pub fn dimensions(&self, handle: &raster::Handle) -> Option<Size<u32>> {
@@ -105,12 +110,15 @@ impl Cache {
                 return Err(raster::Error::Empty);
             }
 
-            let mut buffer = vec![0u32; image.width() as usize * image.height() as usize];
+            let mut buffer =
+                vec![0u32; image.width() as usize * image.height() as usize];
 
             for (i, pixel) in image.pixels().enumerate() {
                 let [r, g, b, a] = pixel.0;
 
-                buffer[i] = bytemuck::cast(tiny_skia::ColorU8::from_rgba(b, g, r, a).premultiply());
+                buffer[i] = bytemuck::cast(
+                    tiny_skia::ColorU8::from_rgba(b, g, r, a).premultiply(),
+                );
             }
 
             let _ = entry.insert(Some(Entry {

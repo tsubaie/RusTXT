@@ -35,3 +35,7 @@ real UI checks. No global Cargo registry files are modified.
 - The renderer regression test compares repeated partial redraws with a full
   render at 100%, 125%, 150%, and 200% scale. Run it with:
   `cargo test -p iced_tiny_skia --lib --locked`.
+
+The crate is formatted with its upstream rustfmt settings
+(`vendor/iced_tiny_skia/rustfmt.toml`, `max_width = 80`), so a `diff -r` against
+the published crate shows only the patches listed above.

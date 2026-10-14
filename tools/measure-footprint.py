@@ -14,7 +14,7 @@ parser.add_argument("binary", type=Path)
 parser.add_argument("--output", type=Path, required=True)
 args = parser.parse_args()
 binary = args.binary.resolve()
-results = {"binary": str(binary), "binary_bytes": binary.stat().st_size, "sha256": hashlib.sha256(binary.read_bytes()).hexdigest(), "runs": []}
+results = {"binary": os.path.basename(binary), "binary_bytes": binary.stat().st_size, "sha256": hashlib.sha256(binary.read_bytes()).hexdigest(), "runs": []}
 for workload in ("empty", "1mib"):
     for repeat in range(3):
         with tempfile.TemporaryDirectory(prefix="rustxt-footprint-") as root:

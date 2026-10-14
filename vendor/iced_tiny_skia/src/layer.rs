@@ -1,6 +1,8 @@
 use crate::Primitive;
 use crate::core::renderer::Quad;
-use crate::core::{self, Background, Color, Point, Rectangle, Svg, Transformation};
+use crate::core::{
+    self, Background, Color, Point, Rectangle, Svg, Transformation,
+};
 use crate::graphics::damage;
 use crate::graphics::layer;
 use crate::graphics::text::{Editor, Paragraph, Text};
@@ -81,7 +83,8 @@ impl Layer {
             bounds: Rectangle::new(position, text.bounds) * transformation,
             color,
             size: text.size * transformation.scale_factor(),
-            line_height: text.line_height.to_absolute(text.size) * transformation.scale_factor(),
+            line_height: text.line_height.to_absolute(text.size)
+                * transformation.scale_factor(),
             font: text.font,
             align_x: text.align_x,
             align_y: text.align_y,
@@ -92,7 +95,11 @@ impl Layer {
         self.text.push(Item::Live(text));
     }
 
-    pub fn draw_text_raw(&mut self, raw: graphics::text::Raw, transformation: Transformation) {
+    pub fn draw_text_raw(
+        &mut self,
+        raw: graphics::text::Raw,
+        transformation: Transformation,
+    ) {
         let raw = Text::Raw {
             raw,
             transformation,
@@ -149,7 +156,8 @@ impl Layer {
     ) {
         let image = Image::Raster {
             image: core::Image {
-                border_radius: image.border_radius * transformation.scale_factor(),
+                border_radius: image.border_radius
+                    * transformation.scale_factor(),
                 ..image
             },
             bounds: bounds * transformation,
@@ -251,13 +259,15 @@ impl Layer {
             &current.primitives,
             |item| match item {
                 Item::Live(primitive) => vec![primitive.visible_bounds()],
-                Item::Group(primitives, group_bounds, transformation) => primitives
-                    .as_slice()
-                    .iter()
-                    .map(Primitive::visible_bounds)
-                    .map(|bounds| bounds * *transformation)
-                    .filter_map(|bounds| bounds.intersection(group_bounds))
-                    .collect(),
+                Item::Group(primitives, group_bounds, transformation) => {
+                    primitives
+                        .as_slice()
+                        .iter()
+                        .map(Primitive::visible_bounds)
+                        .map(|bounds| bounds * *transformation)
+                        .filter_map(|bounds| bounds.intersection(group_bounds))
+                        .collect()
+                }
                 Item::Cached(_primitives, bounds, _transformation) => {
                     vec![*bounds]
                 }
@@ -387,16 +397,16 @@ impl<T> Item<T> {
     pub fn transformation(&self) -> Transformation {
         match self {
             Item::Live(_) => Transformation::IDENTITY,
-            Item::Group(_, _, transformation) | Item::Cached(_, _, transformation) => {
-                *transformation
-            }
+            Item::Group(_, _, transformation)
+            | Item::Cached(_, _, transformation) => *transformation,
         }
     }
 
     pub fn clip_bounds(&self) -> Rectangle {
         match self {
             Item::Live(_) => Rectangle::INFINITE,
-            Item::Group(_, clip_bounds, _) | Item::Cached(_, clip_bounds, _) => *clip_bounds,
+            Item::Group(_, clip_bounds, _)
+            | Item::Cached(_, clip_bounds, _) => *clip_bounds,
         }
     }
 
