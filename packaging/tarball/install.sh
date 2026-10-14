@@ -1,9 +1,12 @@
 #!/bin/sh
 # Install RusTXT from the release tarball. Run as your user for a per-user
 # install under ~/.local, or with sudo for a system-wide install under /usr/local.
+# Set PREFIX to install somewhere else (PREFIX=/opt/rustxt sh install.sh).
 set -eu
 cd "$(dirname "$0")"
-if [ "$(id -u)" -eq 0 ]; then
+if [ -n "${PREFIX:-}" ]; then
+  bin="$PREFIX/bin"; share="$PREFIX/share"
+elif [ "$(id -u)" -eq 0 ]; then
   bin=/usr/local/bin; share=/usr/local/share
 else
   bin="$HOME/.local/bin"; share="$HOME/.local/share"
