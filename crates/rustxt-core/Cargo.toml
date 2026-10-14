@@ -2,6 +2,7 @@
 name = "rustxt-core"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 description = "Toolkit-independent core of RusTXT: documents, recovery storage, configuration, themes"
 
