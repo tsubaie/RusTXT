@@ -28,6 +28,10 @@ real UI checks. No global Cargo registry files are modified.
 - Include shadow extents in visibility checks and clamp shadow rasterization to
   damaged, on-screen pixels. This also avoids rebuilding a full dialog-sized
   shadow for every hovered control.
+- Always clip editor text to its clip bounds. Pixel-offset scrolling makes COSMIC
+  lay out partially visible lines outside the editor's bounds; upstream skips the
+  clip mask then, so those lines paint over the menu bar and smear bold on
+  partial redraws.
 - The renderer regression test compares repeated partial redraws with a full
   render at 100%, 125%, 150%, and 200% scale. Run it with:
   `cargo test -p iced_tiny_skia --lib --locked`.

@@ -500,4 +500,65 @@ mod redraw_tests {
             }
         }
     }
+
+    #[test]
+    fn scrolled_editor_text_stays_inside_its_bounds() {
+        use crate::core::text::{self, Editor as _, LineHeight, Wrapping};
+
+        let text = "fdfdffgh\n".repeat(40);
+        for scale in [1.0, 1.25, 1.5, 2.0] {
+            let size = Size::new((240.0 * scale) as u32, (180.0 * scale) as u32);
+            let viewport = Viewport::with_physical_size(size, scale);
+            let mut renderer = Renderer::new(Font::DEFAULT, Pixels(14.0));
+            let text_bounds = Rectangle {
+                x: 12.0,
+                y: 60.0,
+                width: 200.0,
+                height: 100.0,
+            };
+            let mut editor = graphics::text::Editor::with_text(&text);
+            editor.update(
+                text_bounds.size(),
+                Font::MONOSPACE,
+                Pixels(14.0),
+                LineHeight::default(),
+                Wrapping::None,
+                &mut text::highlighter::PlainText,
+            );
+            // Half a line past line 3, so the first laid-out line straddles the top edge.
+            editor.set_scroll_position(3, 9.0, 0.0);
+            crate::core::text::Renderer::fill_editor(
+                &mut renderer,
+                &editor,
+                text_bounds.position(),
+                Color::WHITE,
+                text_bounds,
+            );
+            let mut pixels = tiny_skia::Pixmap::new(size.width, size.height).unwrap();
+            let mut mask = tiny_skia::Mask::new(size.width, size.height).unwrap();
+            let background = Color::from_rgb8(30, 30, 46);
+            let full = Rectangle::with_size(viewport.logical_size());
+            renderer.draw(&mut pixels.as_mut(), &mut mask, &viewport, &[full], background);
+            let reference = pixels.data().to_vec();
+            let corner = reference[..4].to_vec();
+            let row = size.width as usize * 4;
+            let top = (text_bounds.y * scale) as usize * row;
+            let outside = reference[..top]
+                .chunks(4)
+                .position(|px| px != &corner[..]);
+            assert!(
+                outside.is_none(),
+                "editor text painted above its bounds at scale {scale}, pixel {:?}",
+                outside.map(|i| (i % size.width as usize, i / size.width as usize))
+            );
+            // Typing/caret blinks damage only the editor; nothing may accumulate.
+            for frame in 0..8 {
+                renderer.draw(&mut pixels.as_mut(), &mut mask, &viewport, &[text_bounds], background);
+                assert!(
+                    pixels.data() == &reference[..],
+                    "partial editor redraw changed pixels at scale {scale}, frame {frame}"
+                );
+            }
+        }
+    }
 }

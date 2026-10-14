@@ -368,13 +368,12 @@ impl Engine {
                     return;
                 }
 
-                let clip_mask = match physical_bounds.is_within(&clip_bounds) {
-                    true => None,
-                    false => {
-                        adjust_clip_mask(clip_mask, clip_bounds);
-                        Some(clip_mask as &_)
-                    }
-                };
+                // Always clip: with a pixel scroll offset, COSMIC lays out the partially
+                // visible first/last lines beyond `editor.bounds`. Unclipped, they paint
+                // over the padding and neighbouring widgets, and partial redraws that do
+                // not clear those pixels accumulate the glyphs into a bold smear.
+                adjust_clip_mask(clip_mask, clip_bounds);
+                let clip_mask = Some(clip_mask as &_);
 
                 self.text_pipeline.draw_editor(
                     editor,
