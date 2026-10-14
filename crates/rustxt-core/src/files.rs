@@ -173,6 +173,8 @@ pub fn atomic_save(path: &Path, content: &[u8]) -> Result<(), String> {
         .unwrap_or_else(|| Path::new("."));
     let existing_permissions = fs::metadata(&target).ok().map(|meta| meta.permissions());
 
+    // Only Unix adjusts the builder; keep the binding plain elsewhere.
+    #[cfg_attr(not(unix), allow(unused_mut))]
     let mut builder = tempfile::Builder::new();
     #[cfg(unix)]
     {

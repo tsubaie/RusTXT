@@ -2609,7 +2609,7 @@ mod tests {
     #[test]
     fn shortcuts_map_quit_and_find_next() {
         assert!(matches!(
-            shortcut(Key::Character("q"), keyboard::Modifiers::CTRL),
+            shortcut(Key::Character("q"), keyboard::Modifiers::COMMAND),
             Some(Message::Quit)
         ));
         assert!(matches!(
