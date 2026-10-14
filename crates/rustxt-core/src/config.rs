@@ -6,7 +6,7 @@
 //! `~/.config/rustxt/themes/`. On Omarchy the active theme's `colors.toml`
 //! is read directly, so RusTXT follows the desktop theme with no setup.
 
-use crate::desktop::{self, TitlebarMode};
+use crate::desktop::TitlebarMode;
 use crate::files;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -21,10 +21,10 @@ pub const CONFIG_HEADER: &str = "\
 #   light/dark setting), \"system\", \"light\", \"dark\", \"omarchy\", or the name of a
 #   file in the themes/ directory next to this file (without .toml).
 # appearance.zoom: editor zoom percentage, 10-500.
-# editor.font: empty follows the system monospace font, with Noto Naskh Arabic
-#   for Arabic text. A single family such as \"JetBrainsMono Nerd Font 12\" is
-#   paired with Noto Naskh Arabic the same way; list two families yourself,
-#   e.g. \"JetBrainsMono Nerd Font, Amiri 12\", to choose a different Arabic face.
+# editor.font: one font family, optionally followed by a size in points, such
+#   as \"JetBrainsMono Nerd Font 12\" or \"Fira Code\". Empty follows the system
+#   monospace font. Text the family lacks, such as Arabic, falls back to the
+#   system's fonts automatically.
 # window.title_bar: \"auto\" hides the native title bar on tiling compositors such
 #   as Hyprland and keeps it elsewhere; \"show\" and \"hide\" force it.
 #
@@ -60,9 +60,11 @@ impl Default for Appearance {
 #[serde(default)]
 pub struct EditorConfig {
     pub word_wrap: bool,
-    /// Pango font description such as "JetBrainsMono Nerd Font 12". Empty follows
-    /// the system monospace font. Noto Naskh Arabic covers Arabic unless a
-    /// comma-separated list names a second family, e.g. "Fira Code, Amiri 12".
+    /// A font family optionally followed by a size in points, such as
+    /// "JetBrainsMono Nerd Font 12": the last word is the size when it is a
+    /// number, the rest is the family. Empty follows the system monospace
+    /// font. Only one family is used; glyphs it lacks come from system
+    /// fallback fonts.
     pub font: String,
 }
 
@@ -190,7 +192,12 @@ impl Paths {
     }
 
     /// Directories worth watching for live reloads. Follows the config file's
-    /// symlink so edits to a dotfiles-managed target are noticed too.
+    /// symlink so edits to a dotfiles-managed target are noticed too. The
+    /// config and themes directories are listed whether or not they exist
+    /// yet: [`crate::watch::watch`] picks a missing directory up once it is
+    /// created, so a themes/ folder made after startup is watched too. The
+    /// Omarchy directories are only listed when present, to avoid watching
+    /// an unrelated ancestor on desktops without Omarchy.
     pub fn watch_dirs(&self) -> Vec<PathBuf> {
         let mut dirs = vec![self.config_dir.clone(), self.themes_dir()];
         if let Ok(real) = fs::canonicalize(self.config_file()) {
@@ -204,7 +211,9 @@ impl Paths {
         dirs.push(self.omarchy_theme_dir.clone());
         dirs.sort();
         dirs.dedup();
-        dirs.into_iter().filter(|dir| dir.is_dir()).collect()
+        dirs.into_iter()
+            .filter(|dir| dir.is_dir() || *dir == self.config_dir || *dir == self.themes_dir())
+            .collect()
     }
 }
 
@@ -247,37 +256,6 @@ pub fn save(paths: &Paths, config: &Config) -> Result<(), String> {
         &paths.config_file(),
         format!("{CONFIG_HEADER}{body}").as_bytes(),
     )
-}
-
-/// Everything the interface needs to apply the user's configuration.
-#[derive(Debug, Clone, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct Settings {
-    pub config: Config,
-    pub theme: ResolvedTheme,
-    pub custom_themes: Vec<String>,
-    pub config_path: String,
-    pub omarchy_available: bool,
-    pub tiling_compositor: bool,
-    /// Whether the window should show native decorations.
-    pub decorated: bool,
-    /// Set when config.toml exists but could not be parsed.
-    pub config_error: Option<String>,
-}
-
-pub fn settings(paths: &Paths) -> Settings {
-    let loaded = load(paths);
-    let tiling_compositor = desktop::running_on_tiling_compositor();
-    Settings {
-        theme: resolve_theme(&loaded.config.appearance.theme, paths),
-        custom_themes: list_custom_themes(paths),
-        config_path: paths.config_file().display().to_string(),
-        omarchy_available: paths.omarchy_available(),
-        tiling_compositor,
-        decorated: loaded.config.window.title_bar.decorated(tiling_compositor),
-        config_error: loaded.error,
-        config: loaded.config,
-    }
 }
 
 /// Create a commented default config.toml if none exists yet, so the file is
@@ -369,6 +347,14 @@ pub fn resolve_theme(requested: &str, paths: &Paths) -> ResolvedTheme {
         }
         "omarchy" => omarchy_theme("omarchy", paths),
         name => {
+            // The name becomes a file name under themes/, never a path: a
+            // separator or `..` would reach outside that directory.
+            if !is_theme_name(name) {
+                return ResolvedTheme::fallback(
+                    name,
+                    format!("Theme \"{name}\" could not be loaded: not a valid theme name"),
+                );
+            }
             let path = paths.themes_dir().join(format!("{name}.toml"));
             match read_palette(&path) {
                 Ok(palette) => ResolvedTheme {
@@ -385,6 +371,16 @@ pub fn resolve_theme(requested: &str, paths: &Paths) -> ResolvedTheme {
             }
         }
     }
+}
+
+/// A custom theme is named by its file stem: no path separators, no `..`,
+/// nothing a file system would read as more than a plain name.
+fn is_theme_name(name: &str) -> bool {
+    !name.is_empty()
+        && name != "."
+        && !name.contains(['/', '\\'])
+        && !name.contains("..")
+        && !name.contains('\0')
 }
 
 fn omarchy_theme(requested: &str, paths: &Paths) -> ResolvedTheme {
@@ -441,21 +437,6 @@ pub fn palette_from_omarchy_colors(text: &str) -> Result<Palette, String> {
     } else {
         Err("colors.toml is missing mode, background or foreground".into())
     }
-}
-
-pub fn list_custom_themes(paths: &Paths) -> Vec<String> {
-    let Ok(entries) = fs::read_dir(paths.themes_dir()) else {
-        return Vec::new();
-    };
-    let mut names: Vec<String> = entries
-        .flatten()
-        .filter_map(|entry| {
-            let path = entry.path();
-            (path.extension()? == "toml").then(|| path.file_stem()?.to_str().map(str::to_string))?
-        })
-        .collect();
-    names.sort();
-    names
 }
 
 #[cfg(test)]
@@ -575,7 +556,7 @@ blue = "#89b4fa"
     }
 
     #[test]
-    fn custom_themes_are_listed_and_loaded_and_missing_ones_fall_back() {
+    fn custom_themes_are_loaded_and_missing_ones_fall_back() {
         let dir = tempfile::tempdir().unwrap();
         let paths = paths(dir.path());
         fs::create_dir_all(paths.themes_dir()).unwrap();
@@ -584,8 +565,6 @@ blue = "#89b4fa"
             "mode = \"dark\"\nbackground = \"#002b36\"\nforeground = \"#839496\"\naccent = \"#b58900\"\n",
         )
         .unwrap();
-        fs::write(paths.themes_dir().join("notes.txt"), "ignored").unwrap();
-        assert_eq!(list_custom_themes(&paths), vec!["solar".to_string()]);
 
         let resolved = resolve_theme("solar", &paths);
         assert_eq!(resolved.source, "custom");
@@ -595,6 +574,59 @@ blue = "#89b4fa"
         assert_eq!(missing.source, "fallback");
         assert_eq!(missing.mode, "system");
         assert!(missing.note.unwrap().contains("nope"));
+    }
+
+    #[test]
+    fn theme_names_cannot_escape_the_themes_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = paths(dir.path());
+        // A valid theme file outside themes/ that a path-like name could reach.
+        fs::create_dir_all(&paths.config_dir).unwrap();
+        fs::write(
+            paths.config_dir.join("outside.toml"),
+            "mode = \"dark\"\nbackground = \"#000000\"\nforeground = \"#ffffff\"\n",
+        )
+        .unwrap();
+        for name in [
+            "../outside",
+            "..\\outside",
+            "sub/outside",
+            "..",
+            ".",
+            "a..b",
+            "",
+        ] {
+            let resolved = resolve_theme(name, &paths);
+            assert_eq!(resolved.source, "fallback", "{name:?} was accepted");
+            assert!(resolved.palette.is_none(), "{name:?} loaded a palette");
+            assert!(
+                resolved.note.unwrap().contains("could not be loaded"),
+                "{name:?}"
+            );
+        }
+        assert!(is_theme_name("solar-dark.v2"));
+    }
+
+    #[test]
+    fn watch_dirs_include_the_themes_directory_before_it_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = paths(dir.path());
+        assert!(!paths.themes_dir().exists());
+        let dirs = paths.watch_dirs();
+        assert!(dirs.contains(&paths.config_dir), "{dirs:?}");
+        assert!(dirs.contains(&paths.themes_dir()), "{dirs:?}");
+        assert!(
+            !dirs.contains(&paths.omarchy_theme_dir),
+            "absent Omarchy directories are not watched: {dirs:?}"
+        );
+    }
+
+    #[test]
+    fn config_header_describes_a_single_family_and_size() {
+        assert!(CONFIG_HEADER.contains("one font family"));
+        assert!(CONFIG_HEADER.contains("JetBrainsMono Nerd Font 12"));
+        assert!(!CONFIG_HEADER.contains("Amiri"), "no second family is read");
+        assert!(!CONFIG_HEADER.contains("Pango"));
     }
 
     #[test]

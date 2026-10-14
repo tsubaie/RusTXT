@@ -2,8 +2,11 @@
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use std::{
-    path::PathBuf,
-    sync::mpsc::{self, RecvTimeoutError},
+    path::{Path, PathBuf},
+    sync::{
+        mpsc::{self, RecvTimeoutError},
+        Arc, Mutex,
+    },
     thread,
     time::Duration,
 };
@@ -14,9 +17,13 @@ const QUIET_PERIOD: Duration = Duration::from_millis(200);
 
 /// Keeps the watcher alive; drop it to stop watching.
 pub struct ConfigWatcher {
-    _watcher: RecommendedWatcher,
+    _watcher: Arc<Mutex<RecommendedWatcher>>,
 }
 
+/// Watch `directories` and call `on_change` once per burst of events. A
+/// directory that does not exist yet (a themes/ folder the user has not
+/// made) is not an error: its nearest existing ancestor is watched instead,
+/// and the directory itself is picked up as soon as it appears.
 pub fn watch(
     directories: Vec<PathBuf>,
     on_change: impl Fn() + Send + 'static,
@@ -29,12 +36,23 @@ pub fn watch(
     })
     .map_err(|e| e.to_string())?;
 
-    for directory in &directories {
-        watcher
-            .watch(directory, RecursiveMode::NonRecursive)
-            .map_err(|e| format!("{}: {e}", directory.display()))?;
+    let mut watched: Vec<PathBuf> = Vec::new();
+    let mut pending: Vec<PathBuf> = Vec::new();
+    for directory in directories {
+        if directory.is_dir() {
+            add_watch(&mut watcher, &mut watched, &directory)?;
+        } else {
+            // Creation of the missing directory shows up as an event in its
+            // closest existing ancestor.
+            if let Some(ancestor) = existing_ancestor(&directory) {
+                add_watch(&mut watcher, &mut watched, &ancestor)?;
+            }
+            pending.push(directory);
+        }
     }
 
+    let watcher = Arc::new(Mutex::new(watcher));
+    let shared = Arc::clone(&watcher);
     thread::Builder::new()
         .name("rustxt-config-watch".into())
         .spawn(move || loop {
@@ -49,6 +67,14 @@ pub fn watch(
                     Err(RecvTimeoutError::Disconnected) => return,
                 }
             }
+            if !pending.is_empty() {
+                if let Ok(mut watcher) = shared.lock() {
+                    pending.retain(|directory| {
+                        !(directory.is_dir()
+                            && add_watch(&mut watcher, &mut watched, directory).is_ok())
+                    });
+                }
+            }
             on_change();
         })
         .map_err(|e| e.to_string())?;
@@ -56,16 +82,45 @@ pub fn watch(
     Ok(ConfigWatcher { _watcher: watcher })
 }
 
+fn add_watch(
+    watcher: &mut RecommendedWatcher,
+    watched: &mut Vec<PathBuf>,
+    directory: &Path,
+) -> Result<(), String> {
+    if watched.iter().any(|known| known == directory) {
+        return Ok(());
+    }
+    watcher
+        .watch(directory, RecursiveMode::NonRecursive)
+        .map_err(|e| format!("{}: {e}", directory.display()))?;
+    watched.push(directory.to_path_buf());
+    Ok(())
+}
+
+fn existing_ancestor(directory: &Path) -> Option<PathBuf> {
+    directory
+        .ancestors()
+        .skip(1)
+        .find(|ancestor| ancestor.is_dir())
+        .map(Path::to_path_buf)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::{
         fs,
-        sync::{
-            atomic::{AtomicUsize, Ordering},
-            Arc,
-        },
+        sync::atomic::{AtomicUsize, Ordering},
+        time::Instant,
     };
+
+    fn wait_for(hits: &AtomicUsize, count: usize) {
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while hits.load(Ordering::SeqCst) < count && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(20));
+        }
+        thread::sleep(QUIET_PERIOD * 2);
+    }
 
     #[test]
     fn coalesces_bursts_into_one_notification() {
@@ -80,11 +135,29 @@ mod tests {
         for index in 0..5 {
             fs::write(dir.path().join(format!("file{index}.toml")), "x").unwrap();
         }
-        let deadline = std::time::Instant::now() + Duration::from_secs(3);
-        while hits.load(Ordering::SeqCst) == 0 && std::time::Instant::now() < deadline {
-            thread::sleep(Duration::from_millis(20));
-        }
-        thread::sleep(QUIET_PERIOD * 2);
+        wait_for(&hits, 1);
         assert_eq!(hits.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn a_directory_created_later_is_watched_once_it_appears() {
+        let dir = tempfile::tempdir().unwrap();
+        let themes = dir.path().join("rustxt/themes");
+        let hits = Arc::new(AtomicUsize::new(0));
+        let counter = Arc::clone(&hits);
+        let _watcher = watch(vec![themes.clone()], move || {
+            counter.fetch_add(1, Ordering::SeqCst);
+        })
+        .unwrap();
+
+        // Creating the directory is noticed through its ancestor...
+        fs::create_dir_all(&themes).unwrap();
+        wait_for(&hits, 1);
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
+        // ...after which writes inside it are noticed directly, even though
+        // the ancestor watch is not recursive.
+        fs::write(themes.join("solar.toml"), "x").unwrap();
+        wait_for(&hits, 2);
+        assert_eq!(hits.load(Ordering::SeqCst), 2);
     }
 }
