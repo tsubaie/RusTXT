@@ -5,9 +5,11 @@ Measured on 2026-09-10, branch `feat/iced-cross-platform`, rebased onto
 
 ## Initial migration result
 
-The default frontend is now `rustxt-iced`. The GTK crate is retained as an
-explicit comparison target. Both use `rustxt-core` and the existing recovery
-format. No notes or user configuration were modified during testing.
+The default frontend is now `rustxt-iced`. The GTK crate served as the
+comparison target for these measurements; it was removed from the tree in
+0.6.0 and is preserved at git tag `v0.4.1-gtk` (see [gtk.md](gtk.md)). Both
+frontends use `rustxt-core` and the same recovery format. No notes or user
+configuration were modified during testing.
 
 | Measurement | GTK before | Iced after | Change |
 |---|---:|---:|---:|
@@ -31,9 +33,13 @@ or total system memory including the display server/desktop portal.
 
 ## Method
 
-- Same machine: x86_64 Linux, kernel `7.2.3-arch1-3`.
+- Both frontends measured on the same x86_64 Linux machine. The raw JSON files
+  record the host, kernel, and binary hashes of the recorded run.
 - Both built with the workspace release profile: thin LTO, one codegen unit,
-  stripped symbols. The original GTK executable was preserved before migration.
+  stripped symbols. The GTK executable is built from tag `v0.4.1-gtk`
+  (`cargo build --release -p rustxt` in a checkout of that tag, with the GTK 4,
+  libadwaita, and GtkSourceView 5 development packages installed); the Iced
+  executable is `target/release/rustxt-iced` from the current checkout.
 - Xvfb display at 1280×1024, each application window explicitly resized to
   1000×700. GTK uses `GSK_RENDERER=cairo`; Iced uses `tiny-skia` with no WGPU backend.
 - Separate temporary XDG and recovery directories for each run.
@@ -45,14 +51,18 @@ or total system memory including the display server/desktop portal.
 
 Raw results, including binary SHA-256 hashes:
 [GTK](benchmarks/gtk-linux.json) and [Iced](benchmarks/iced-linux.json).
-The preserved GTK executable is in `target/footprint/rustxt-gtk` in this workspace;
-the workspace executable is `target/release/rustxt-iced`. The follow-up below
-records a specific renderer-fix snapshot, not every subsequent release build.
+The follow-up below records a specific renderer-fix snapshot, not every
+subsequent release build.
 
-To repeat on Linux:
+To repeat on Linux, build the GTK binary from the tag and point the script at
+both executables (`tools/measure-footprint.py` needs Python 3, `xvfb-run`, and
+`xdotool`):
 
 ```sh
-xvfb-run -a -s '-screen 0 1280x1024x24' python3 tools/measure-footprint.py target/footprint/rustxt-gtk --output /tmp/gtk.json
+git worktree add ../rustxt-gtk v0.4.1-gtk
+(cd ../rustxt-gtk && cargo build --release -p rustxt)
+cargo build --release -p rustxt-iced
+xvfb-run -a -s '-screen 0 1280x1024x24' python3 tools/measure-footprint.py ../rustxt-gtk/target/release/rustxt --output /tmp/gtk.json
 xvfb-run -a -s '-screen 0 1280x1024x24' python3 tools/measure-footprint.py target/release/rustxt-iced --output /tmp/iced.json
 ```
 
@@ -101,19 +111,23 @@ before the first layout, clear stale selections, and expose scroll restoration.
 Their regression tests must remain enabled when updating Iced.
 
 Shared-core portability changes cover Windows configuration/data paths and file
-saves. Update checksums now use Rust SHA-256 instead of a `sha256sum` executable.
-The old Unix tarball updater's integration tests remain Unix-specific. A flaky
-checksum-corruption fixture was corrected so the replacement digit always differs.
+saves. The in-app updater inherited from the GTK frontend was never enabled in
+Iced and is removed from the core in 0.6.0; the About dialog links to the
+releases page instead.
 
 ## Validation and limits
 
-- 52 core/editor/IPC and migration tests pass on Linux.
+- At the time of the migration, 52 core/editor/IPC and migration tests passed
+  on Linux.
 - Workspace formatting and Clippy with warnings denied pass.
-- All 8 retained GTK end-to-end tests pass against the shared-core changes.
-- Real X11 UI tests pass: typing, undo/redo, forced process termination and recovery,
-  recovered undo history, tabs, closing/reopening notes, find selection/replacement,
-  Arabic/English rendering, file forwarding, CRLF saves, external-change protection,
-  settings, scroll recovery, and clean exit.
+- At the time of the migration, all 8 GTK end-to-end tests (now at tag
+  `v0.4.1-gtk`) passed against the shared-core changes.
+- Real X11 UI tests (`tools/iced-e2e.py`) pass: typing, undo/redo, forced process
+  termination and recovery, recovered undo history, tabs, closing/reopening
+  notes, find selection/replacement, file forwarding, CRLF saves,
+  external-change protection, settings, scroll recovery, and clean exit. An
+  Arabic/English document is opened and a screenshot (`editor.png`) is captured
+  for manual review; the harness makes no assertion about how it is rendered.
 - Native CI validates Linux, Windows, Apple Silicon macOS, and Intel macOS with
   formatting, Clippy, core/editor tests, renderer regressions, and release builds.
   Native startup smoke tests load Unicode filenames, forward a second launch into
@@ -134,9 +148,9 @@ checksum-corruption fixture was corrected so the replacement digit always differ
 - Menus are drawn inside the application; macOS global menu integration and Finder
   document-open events are not implemented. Opening via the CLI, in-app dialog,
   and file drop is supported.
-- Existing GTK and Iced processes must not edit the same recovery database at the
-  same time. The Iced instance lock coordinates Iced processes; older GTK builds
-  do not participate in it.
+- An installed 0.4.x GTK build and an Iced build must not edit the same recovery
+  database at the same time. The Iced instance lock coordinates Iced processes;
+  the 0.4.x builds do not participate in it.
 
 The release qualification run is recorded in
 [the cross-platform package workflow](https://github.com/tsubaie/RusTXT/actions/runs/34477781286)
