@@ -1,6 +1,6 @@
 //! Find and replace: the search handlers and the find bar.
 
-use super::{hint, App, Message, CAPTION, EDITOR, UI};
+use super::{view::hint, App, Message, CAPTION, EDITOR, UI};
 use crate::{
     icons::{icon, Icon},
     platform::bold_font,
