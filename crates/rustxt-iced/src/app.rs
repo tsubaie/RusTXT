@@ -410,8 +410,14 @@ impl App {
         };
     }
     fn subscription(&self) -> Subscription<Message> {
+        let period = tick_period(
+            &self.docs,
+            self.active,
+            self.settings_dirty.is_some() || self.layout_dirty.is_some(),
+            self.reload.load(Ordering::Relaxed),
+        );
         Subscription::batch([
-            iced::time::every(Duration::from_millis(250)).map(|_| Message::Tick),
+            iced::time::every(period).map(|_| Message::Tick),
             window::events().map(|(_, event)| Message::Window(event)),
             iced::event::listen_with(|event, status, _| {
                 if let Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) = event {
@@ -643,7 +649,14 @@ impl App {
                         self.config = loaded.config;
                         self.apply_appearance();
                     }
+                    if self.settings_open {
+                        self.custom_themes = config::list_custom_themes(&self.paths);
+                    }
                 }
+                if self.last_inbox_poll.elapsed() < INBOX_INTERVAL {
+                    return Task::none();
+                }
+                self.last_inbox_poll = Instant::now();
                 match self.instance.receive() {
                     Ok(messages) if !messages.is_empty() => {
                         for paths in messages {
@@ -983,6 +996,7 @@ impl App {
                     let result = self.persist();
                     self.report(result);
                     if self.docs.is_empty() {
+                        let _ = self.flush_deferred(true);
                         return iced::exit();
                     }
                 }
@@ -1061,7 +1075,9 @@ impl App {
                 self.menu = None;
                 self.submenu = None;
                 self.config.appearance.zoom = value.clamp(10, 500);
-                return self.save_settings();
+                // Wheel notches arrive in bursts: apply now, write once they settle.
+                self.apply_appearance();
+                self.settings_dirty = Some(Instant::now());
             }
             Message::Titlebar(value) => {
                 let old = self
@@ -1138,11 +1154,7 @@ impl App {
             }
             Message::Window(window::Event::Resized(size)) => {
                 self.window_size = size;
-                let result = self.storage.set_state(
-                    "window",
-                    &format!("{} {} 0", size.width as u32, size.height as u32),
-                );
-                self.report(result);
+                self.layout_dirty = Some(Instant::now());
             }
             Message::Window(window::Event::CloseRequested) => return self.update(Message::Quit),
             Message::Window(window::Event::FileDropped(path)) => {
