@@ -16,6 +16,9 @@ accompany each GitHub Release live in `docs/releases/<version>.md`.
 
 ### Changed
 
+- Undo and redo step through typed words instead of single characters: a run of
+  characters typed without a space or line break is one undo step.
+
 - The `ci.yml` and `iced.yml` workflows are merged into one CI workflow, and
   `make check` runs exactly the gates CI runs.
 - The recovery database (`session.db`) is created with mode `0600` on Unix.

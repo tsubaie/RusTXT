@@ -95,8 +95,10 @@ with tempfile.TemporaryDirectory(prefix='rustxt-iced-e2e-') as temp:
         launch()
         app.type_text('Recovery survives a crash.\nSecond line.')
         app.wait_for(lambda: db.active_text() == 'Recovery survives a crash.\nSecond line.', 'Typing not persisted')
+        # Undo groups a typed run: "line." was typed without a word break, so
+        # one step removes it whole and redo brings it back whole.
         app.key('ctrl+z')
-        app.wait_for(lambda: db.active_text() == 'Recovery survives a crash.\nSecond line', 'Undo failed')
+        app.wait_for(lambda: db.active_text() == 'Recovery survives a crash.\nSecond ', 'Undo failed')
         app.key('ctrl+shift+z')
         app.wait_for(lambda: db.active_text().endswith('line.'), 'Redo failed')
 
@@ -105,7 +107,7 @@ with tempfile.TemporaryDirectory(prefix='rustxt-iced-e2e-') as temp:
         launch()
         app.wait_for(lambda: db.active_text() == 'Recovery survives a crash.\nSecond line.', 'Crash restore failed')
         app.key('ctrl+z')
-        app.wait_for(lambda: db.active_text().endswith('line'), 'Recovered undo history failed')
+        app.wait_for(lambda: db.active_text().endswith('Second '), 'Recovered undo history failed')
         app.key('ctrl+shift+z')
         app.wait_for(lambda: db.active_text().endswith('line.'), 'Recovered redo history failed')
 

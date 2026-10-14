@@ -164,8 +164,20 @@ class Database:
         return rows[0][0]
 
     def active_scroll_line(self):
-        """First visible line of the active editor, from the Iced view state."""
-        return json.loads(self.state('iced-history:' + self.active_id()))['scroll'][0]
+        """First visible line of the active editor, from the Iced view state.
+
+        The viewport is stored as "line vertical horizontal" under
+        iced-scroll:<id>; databases written by 0.5.x kept it in the history blob.
+        """
+        doc_id = self.active_id()
+        scroll = self.state('iced-scroll:' + doc_id)
+        if scroll is not None:
+            return int(scroll.split()[0])
+        history = self.state('iced-history:' + doc_id)
+        if history is None:
+            return None
+        legacy = json.loads(history).get('scroll')
+        return None if legacy is None else legacy[0]
 
     def open_fingerprints(self):
         return dict(self.query('SELECT file_path, disk_fingerprint FROM documents WHERE is_open = 1'))
