@@ -222,18 +222,23 @@ impl Storage {
                 connection,
                 recovered_from: None,
             }),
-            Err(error) if path.exists() => {
+            // Only a database SQLite itself reports as corrupt or not a
+            // database is replaced. A busy lock held by another process, a
+            // permission problem, or a full disk must not move drafts aside.
+            Err(ConnectError::Corrupt(error)) if path.exists() => {
                 let moved = move_aside(path).map_err(|rename_error| {
                     format!("{error}; the file could not be moved aside either: {rename_error}")
                 })?;
-                let connection = connect(path)
-                    .map_err(|retry| format!("{error}; a fresh database failed too: {retry}"))?;
+                let connection = connect(path).map_err(|retry| {
+                    let (ConnectError::Corrupt(retry) | ConnectError::Other(retry)) = retry;
+                    format!("{error}; a fresh database failed too: {retry}")
+                })?;
                 Ok(Self {
                     connection,
                     recovered_from: Some(moved),
                 })
             }
-            Err(error) => Err(error),
+            Err(ConnectError::Corrupt(error)) | Err(ConnectError::Other(error)) => Err(error),
         }
     }
 
@@ -477,7 +482,30 @@ fn create_private_dir(dir: &Path) -> Result<(), String> {
 
 /// Open the database at `path` and bring its schema up to date. Any failure
 /// here means the file cannot be used as it is.
-fn connect(path: &Path) -> Result<Connection, String> {
+/// Why a database could not be opened: corruption SQLite itself detected,
+/// which `Storage::open` recovers from, or anything else, which it reports.
+enum ConnectError {
+    Corrupt(String),
+    Other(String),
+}
+
+impl From<rusqlite::Error> for ConnectError {
+    fn from(error: rusqlite::Error) -> Self {
+        use rusqlite::ErrorCode::{DatabaseCorrupt, NotADatabase};
+        match error.sqlite_error_code() {
+            Some(DatabaseCorrupt) | Some(NotADatabase) => Self::Corrupt(error.to_string()),
+            _ => Self::Other(error.to_string()),
+        }
+    }
+}
+
+impl From<String> for ConnectError {
+    fn from(error: String) -> Self {
+        Self::Other(error)
+    }
+}
+
+fn connect(path: &Path) -> Result<Connection, ConnectError> {
     // Create the file ourselves, owner-only, before SQLite does: the -wal
     // and -shm files it adds later copy the main file's mode. The mode is
     // also applied to a database created by an earlier version, which
@@ -492,25 +520,19 @@ fn connect(path: &Path) -> Result<Connection, String> {
             .mode(0o600)
             .open(path)
             .and_then(|_| fs::set_permissions(path, fs::Permissions::from_mode(0o600)))
-            .map_err(text)?;
+            .map_err(|e| ConnectError::Other(e.to_string()))?;
     }
-    let connection = Connection::open(path).map_err(text)?;
-    connection
-        .pragma_update(None, "journal_mode", "WAL")
-        .map_err(text)?;
+    let connection = Connection::open(path)?;
+    connection.pragma_update(None, "journal_mode", "WAL")?;
     // With WAL, synchronous=NORMAL still makes every committed transaction
     // survive an application crash; only a power loss or OS crash can lose
     // the last transactions, which is the same guarantee the user's files
     // get from the filesystem. It avoids an fsync on every keystroke snapshot.
-    connection
-        .pragma_update(None, "synchronous", "NORMAL")
-        .map_err(text)?;
+    connection.pragma_update(None, "synchronous", "NORMAL")?;
     // Overwrite freed pages with zeros so discarded text does not linger in
     // the file after its row is deleted.
-    connection
-        .pragma_update(None, "secure_delete", "ON")
-        .map_err(text)?;
-    connection.execute_batch(SCHEMA).map_err(text)?;
+    connection.pragma_update(None, "secure_delete", "ON")?;
+    connection.execute_batch(SCHEMA)?;
     // Databases created by earlier versions predate these columns.
     ensure_column(&connection, "closed_at", "INTEGER")?;
     ensure_column(&connection, "line_ending", "TEXT NOT NULL DEFAULT 'LF'")?;
@@ -678,6 +700,30 @@ mod tests {
         fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
         let _storage = Storage::open(&path).unwrap();
         assert_eq!(mode(&path), 0o600);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_unreadable_but_healthy_database_is_not_moved_aside() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("session.db");
+        drop(Storage::open(&path).unwrap());
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o000)).unwrap();
+        let error = Storage::open(&path)
+            .err()
+            .expect("open fails without permissions");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        assert!(path.exists(), "the database stays in place: {error}");
+        assert!(
+            !fs::read_dir(dir.path()).unwrap().any(|entry| entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .contains("corrupt")),
+            "nothing was moved aside"
+        );
+        assert!(Storage::open(&path).unwrap().recovered_from().is_none());
     }
 
     #[test]
