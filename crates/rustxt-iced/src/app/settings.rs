@@ -364,7 +364,7 @@ impl App {
                     setting(
                         colors,
                         "Font",
-                        if self.config.editor.font.is_empty() { "Following the system monospace font, with Noto Naskh Arabic for Arabic text.".into() } else { "Paired with Noto Naskh Arabic for Arabic text. List two families in config.toml to pick another, e.g. \"JetBrainsMono Nerd Font, Amiri 12\"".into() },
+                        if self.config.editor.font.is_empty() { "Following the system monospace font, with Noto Naskh Arabic for Arabic text.".into() } else { "Paired with Noto Naskh Arabic for Arabic text. Set one family and a size in config.toml, e.g. \"JetBrains Mono 12\".".into() },
                         font.into()
                     ),
                     separator(),
