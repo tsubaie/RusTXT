@@ -1,5 +1,5 @@
 {
-  "binary": "/home/tsubaie/Projects/RusTXT/target/release/rustxt-iced",
+  "binary": "rustxt-iced",
   "binary_bytes": 15154256,
   "sha256": "532104ab6580cc39fafb56be1da189a4f1e7460640a9458137ff6b9f9b0cd8c0",
   "runs": [
