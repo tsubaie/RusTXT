@@ -45,6 +45,9 @@ TRANSIENT_ERRORS = (
 )
 
 IMAGEMAGICK = shutil.which('magick') or 'convert'
+"""ImageMagick 7 exposes every tool as a `magick` subcommand; 6 (Ubuntu 22.04)
+ships them as separate binaries (`convert`, `compare`, `import`)."""
+IMAGEMAGICK_COMPARE = [IMAGEMAGICK, 'compare'] if IMAGEMAGICK.endswith('magick') else ['compare']
 
 
 def sha256(data):
@@ -402,6 +405,59 @@ def changed_fraction(path_a, path_b, threshold='3%'):
          '-evaluate-sequence', 'Max', '-threshold', threshold, '-format', '%[fx:mean]', 'info:'],
         capture_output=True, text=True, check=True, timeout=60)
     return float(result.stdout.strip())
+
+
+def image_size(path):
+    """(width, height) in pixels."""
+    result = subprocess.run([IMAGEMAGICK, str(path), '-format', '%w %h', 'info:'],
+                            capture_output=True, text=True, check=True, timeout=30)
+    width, height = result.stdout.split()
+    return int(width), int(height)
+
+
+def distinct_colors(path, crop=None):
+    """Number of distinct colours in a screenshot region (ImageMagick %k)."""
+    result = subprocess.run([IMAGEMAGICK, str(path), *_crop_args(crop), '-format', '%k', 'info:'],
+                            capture_output=True, text=True, check=True, timeout=30)
+    return int(result.stdout.strip())
+
+
+def editor_region(app, shot):
+    """(x, y, width, height) of the text area and its background colour, from
+    the window geometry and a screenshot: scan the centre column from both
+    ends until the editor background (the colour at the window centre, which
+    must be blank in `shot`) is reached; the rows above are the tab and menu
+    bars, the rows below the status bar."""
+    geometry = app.geometry()
+    width, height = geometry['WIDTH'], geometry['HEIGHT']
+    column = Image.load(shot, crop=(width // 2, 0, 1, height))
+    background = column.pixel(0, height // 2)
+    top = next(y for y in range(height) if column.pixel(0, y) == background)
+    bottom = next(y for y in range(height - 1, -1, -1) if column.pixel(0, y) == background)
+    assert 0.05 * height < top < 0.3 * height, f'Editor top edge {top} not plausible for a {height} px window'
+    assert bottom > 0.7 * height, f'Editor bottom edge {bottom} not plausible for a {height} px window'
+    return (0, top, width, bottom - top + 1), background
+
+
+CARET_NOISE = 0.0005
+"""Fraction of window pixels two captures of a settled frame may differ by.
+The editor caret (and a focused text input's) blinks every 500 ms and is one
+logical pixel wide by a line tall: under 50 px of a 700,000 px window. A
+frame still being drawn (a menu, a dialog, a scrolled line) changes thousands."""
+
+
+def stable_capture(app, name, noise=CARET_NOISE):
+    """Screenshot `name` once two consecutive captures RENDER_SETTLE apart show
+    the same frame (within caret blink noise) and the surface has been painted
+    (more than one colour); None otherwise, so it can be polled with wait_for."""
+    path = app.capture(name)
+    previous = path.with_name(path.stem + '.previous.png')
+    shutil.copyfile(path, previous)
+    time.sleep(RENDER_SETTLE)
+    path = app.capture(name)
+    stable = changed_fraction(previous, path) <= noise and distinct_colors(path) > 1
+    previous.unlink()
+    return path if stable else None
 
 
 def color_close(actual, expected, tolerance=2):

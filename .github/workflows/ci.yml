@@ -9,6 +9,11 @@ on:
   pull_request:
     paths-ignore: ["**.md", "docs/**", "LICENSE"]
   workflow_dispatch:
+    inputs:
+      update_goldens:
+        description: "Regenerate tools/goldens on this runner and upload them as the goldens artifact"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -42,11 +47,29 @@ jobs:
       - name: Linux dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libfontconfig1-dev libx11-dev libx11-xcb1 libxcursor1 libxrandr-dev libxi-dev xvfb xdotool imagemagick fonts-noto-core
+          sudo apt-get install -y libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libfontconfig1-dev libx11-dev libx11-xcb1 libxcursor1 libxrandr-dev libxi-dev xvfb xdotool imagemagick fonts-noto-core fonts-dejavu-core
       - name: make check
         run: make check
-      - name: Real window, recovery and rendering tests
+      - name: Real window, recovery, rendering and regression tests
         run: make e2e
+      # The goldens are made on this image (tools/goldens/README.md), so they
+      # are compared only here, and only once some have been committed.
+      - name: Golden screenshots
+        if: ${{ !inputs.update_goldens }}
+        run: |
+          if ls tools/goldens/*.png >/dev/null 2>&1; then
+            make goldens
+          else
+            echo "No golden screenshots committed; skipping the comparison."
+          fi
+      - name: Regenerate golden screenshots
+        if: ${{ inputs.update_goldens }}
+        run: make goldens-update
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: ${{ inputs.update_goldens }}
+        with:
+          name: goldens
+          path: tools/goldens
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
@@ -54,6 +77,8 @@ jobs:
           path: |
             target/iced-e2e
             target/iced-rendering-e2e
+            target/iced-regressions
+            target/iced-golden
 
   smoke:
     name: Smoke ${{ matrix.os }}
