@@ -4,7 +4,8 @@ name: Release
 # A manual run builds and smoke-tests everything without publishing.
 on:
   push:
-    tags: ["v*"]
+    # Only release versions; archival tags such as v0.4.1-gtk must not start a build.
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
   workflow_dispatch:
 
 # Read-only by default; only the publishing job asks for more.
