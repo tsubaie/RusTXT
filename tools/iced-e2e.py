@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from e2e_common import (  # noqa: E402
-    RENDER_SETTLE, Harness, Image, InkMask, changed_fraction, resolve_binary, sandbox_env, sha256,
+    RENDER_SETTLE, Harness, InkMask, changed_fraction, editor_region, resolve_binary, sandbox_env, sha256,
 )
 
 binary = resolve_binary(sys.argv[1])
@@ -40,25 +40,10 @@ MODAL_CHANGE_MINIMUM = 0.3
 ARABIC = 'مرحبا بالعالم\nEnglish text 👋\n'
 
 
-def editor_region(app, shot):
-    """(x, y, width, height) of the text area, from the window geometry and
-    the screenshot: scan the centre column from both ends until the editor
-    background (the colour at the window centre, which stays blank because
-    the RTL line is right-aligned and the LTR line left-aligned) is reached;
-    the rows above are the tab and menu bars, the rows below the status bar."""
-    geometry = app.geometry()
-    width, height = geometry['WIDTH'], geometry['HEIGHT']
-    column = Image.load(shot, crop=(width // 2, 0, 1, height))
-    background = column.pixel(0, height // 2)
-    top = next(y for y in range(height) if column.pixel(0, y) == background)
-    bottom = next(y for y in range(height - 1, -1, -1) if column.pixel(0, y) == background)
-    assert 0.05 * height < top < 0.3 * height, f'Editor top edge {top} not plausible for a {height} px window'
-    assert bottom > 0.7 * height, f'Editor bottom edge {bottom} not plausible for a {height} px window'
-    return (0, top, width, bottom - top + 1), background
-
-
 def editor_text_check(app, shot):
-    """Return the ink mask of the editor when both lines have rendered, else None."""
+    """Return the ink mask of the editor when both lines have rendered, else None.
+    The window centre stays blank because the RTL line is right-aligned and
+    the LTR line left-aligned, which is what editor_region's scan needs."""
     region, background = editor_region(app, shot)
     mask = InkMask.load(shot, background, crop=region)
     if mask.count() < EDITOR_INK_MINIMUM or len(mask.ink_bands()) < 2:
