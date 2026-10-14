@@ -265,7 +265,17 @@ impl App {
                 ))
             })
             .unwrap_or(iced::Size::new(1000.0, 700.0));
-        files::refresh_from_disk(&mut session.documents);
+        let mut notices = files::refresh_from_disk(&mut session.documents);
+        if let Some(moved) = storage.recovered_from() {
+            notices.insert(
+                0,
+                format!(
+                    "The recovery database could not be opened and was replaced. \
+                     The old file was kept as {} in case anything can be salvaged from it.",
+                    moved.display()
+                ),
+            );
+        }
         let active = session
             .documents
             .iter()
@@ -284,7 +294,11 @@ impl App {
             paths,
             font_draft: loaded.config.editor.font.clone(),
             config: loaded.config,
-            error: loaded.error,
+            error: loaded
+                .error
+                .into_iter()
+                .chain(notices)
+                .reduce(|a, b| format!("{a}\n\n{b}")),
             search: Search::default(),
             find_open: false,
             replace_open: false,
@@ -1000,7 +1014,9 @@ impl App {
                     Ok(Some(mut state)) => {
                         state.ensure_unique_title(self.docs.iter().map(|d| d.state.title.as_str()));
                         let mut states = vec![state];
-                        files::refresh_from_disk(&mut states);
+                        for problem in files::refresh_from_disk(&mut states) {
+                            self.report(Err(problem));
+                        }
                         for state in states {
                             let mut doc = Document::new(state);
                             let result = doc.restore_history(&self.storage);
@@ -2324,6 +2340,13 @@ fn write_print_file(cache_dir: &Path, html: &str) -> Result<PathBuf, String> {
         .finish();
     let path = cache_dir.join(format!("print-{}-{nonce:016x}.html", std::process::id()));
     files::atomic_save(&path, html.as_bytes())?;
+    // The page is a copy of the user's text; keep it owner-only regardless of umask.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| e.to_string())?;
+    }
     Ok(path)
 }
 

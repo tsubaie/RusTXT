@@ -439,6 +439,23 @@ pub fn palette_from_omarchy_colors(text: &str) -> Result<Palette, String> {
     }
 }
 
+/// Names of the custom themes in the themes directory, sorted, without the
+/// `.toml` extension. The Settings panel lists them next to the built-in themes.
+pub fn list_custom_themes(paths: &Paths) -> Vec<String> {
+    let Ok(entries) = fs::read_dir(paths.themes_dir()) else {
+        return Vec::new();
+    };
+    let mut names: Vec<String> = entries
+        .flatten()
+        .filter_map(|entry| {
+            let path = entry.path();
+            (path.extension()? == "toml").then(|| path.file_stem()?.to_str().map(str::to_string))?
+        })
+        .collect();
+    names.sort();
+    names
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
