@@ -1167,21 +1167,10 @@ impl App {
             }
             Message::Print => {
                 self.menu = None;
-                let escaped = self
-                    .doc()
-                    .state
-                    .content
-                    .replace('&', "&amp;")
-                    .replace('<', "&lt;")
-                    .replace('>', "&gt;");
-                let html = format!("<!doctype html><meta charset=utf-8><title>RusTXT print</title><style>body{{font:12pt monospace}}pre{{white-space:pre-wrap;overflow-wrap:anywhere;unicode-bidi:plaintext}}@page{{margin:20mm}}</style><pre>{escaped}</pre><script>onload=()=>print()</script>");
-                let path = self.paths.cache_dir.join("print.html");
-                let result = std::fs::create_dir_all(&self.paths.cache_dir)
-                    .map_err(|e| e.to_string())
-                    .and_then(|_| files::atomic_save(&path, html.as_bytes()))
-                    .and_then(|_| {
-                        webbrowser::open(&path.to_string_lossy()).map_err(|e| e.to_string())
-                    });
+                let html = print_html(&self.doc().state.content);
+                let result = write_print_file(&self.paths.cache_dir, &html).and_then(|path| {
+                    webbrowser::open(&path.to_string_lossy()).map_err(|e| e.to_string())
+                });
                 self.report(result);
             }
             Message::OpenLink(url) => {
@@ -2470,8 +2459,18 @@ fn shortcut(key: Key<&str>, modifiers: keyboard::Modifiers) -> Option<Message> {
     }
 }
 
-/// Match GTK/fontconfig aliases on Linux; retain Iced's portable fallback elsewhere.
+/// Match GTK/fontconfig aliases on Linux; retain Iced's portable fallback
+/// elsewhere. Each alias spawns `fc-match` at most once per process.
 fn system_font(alias: &str) -> Option<String> {
+    static SANS: OnceLock<Option<String>> = OnceLock::new();
+    static MONOSPACE: OnceLock<Option<String>> = OnceLock::new();
+    match alias {
+        "sans-serif" => SANS.get_or_init(|| query_system_font(alias)).clone(),
+        "monospace" => MONOSPACE.get_or_init(|| query_system_font(alias)).clone(),
+        other => query_system_font(other),
+    }
+}
+fn query_system_font(alias: &str) -> Option<String> {
     #[cfg(target_os = "linux")]
     {
         let output = std::process::Command::new("fc-match")
