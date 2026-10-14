@@ -2918,7 +2918,7 @@ checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
 name = "rustxt-core"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "notify",
  "rusqlite",
@@ -2931,7 +2931,7 @@ dependencies = [
 
 [[package]]
 name = "rustxt-iced"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "chrono",
  "fs2",

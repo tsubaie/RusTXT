@@ -1,7 +1,7 @@
 # Builds RusTXT from the checked-out repository (used by the release
 # workflow). For the AUR, see ../aur/rustxt-bin/PKGBUILD.
 pkgname=rustxt
-pkgver=0.5.0
+pkgver=0.6.0
 pkgrel=1
 pkgdesc="Dead simple, recoverable text editor built with Rust and Iced"
 arch=('x86_64' 'aarch64')

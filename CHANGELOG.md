@@ -7,6 +7,8 @@ accompany each GitHub Release live in `docs/releases/<version>.md`.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-14
+
 ### Removed
 
 - The GTK frontend (`crates/rustxt-gtk`, the `rustxt` binary of 0.4.x) and its
@@ -18,7 +20,6 @@ accompany each GitHub Release live in `docs/releases/<version>.md`.
 
 - Undo and redo step through typed words instead of single characters: a run of
   characters typed without a space or line break is one undo step.
-
 - The `ci.yml` and `iced.yml` workflows are merged into one CI workflow, and
   `make check` runs exactly the gates CI runs.
 - The recovery database (`session.db`) is created with mode `0600` on Unix.
@@ -58,7 +59,6 @@ accompany each GitHub Release live in `docs/releases/<version>.md`.
   falling back.
 - Storage failures such as a full disk say what they mean for unsaved drafts.
 - Long tab titles are truncated on one line instead of wrapping.
-
 - The first visible editor line painted over the menu bar and became bold after
   partial redraws.
 
