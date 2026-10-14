@@ -591,16 +591,28 @@ impl App {
     }
     fn save_settings(&mut self) -> Task<Message> {
         self.apply_appearance();
+        self.settings_dirty = None;
         let result = config::save(&self.paths, &self.config);
         self.report(result);
         Task::none()
     }
     fn update(&mut self, message: Message) -> Task<Message> {
-        let modal_open = self.settings_open
-            || self.about_open
-            || self.go_open
-            || self.discard_id.is_some()
-            || self.error.is_some();
+        if self.docs.is_empty() {
+            // Only reachable between `iced::exit()` and shutdown.
+            return Task::none();
+        }
+        let task = self.handle(message);
+        if let Some(doc) = self.docs.get(self.active) {
+            self.selection = doc.selected_range();
+            if self.find_open {
+                self.search.locate(&self.selection);
+            }
+        }
+        task
+    }
+    fn handle(&mut self, message: Message) -> Task<Message> {
+        let modal_open =
+            self.settings_open || self.about_open || self.go_open || self.discard_id.is_some();
         if modal_open
             && matches!(
                 message,
@@ -624,11 +636,15 @@ impl App {
         match message {
             Message::CloseActive => return self.update(Message::Close(self.active)),
             Message::NextTab(backwards) => {
+                let count = self.docs.len();
+                if count == 0 {
+                    return Task::none();
+                }
                 return self.update(Message::Select(if backwards {
-                    (self.active + self.docs.len() - 1) % self.docs.len()
+                    (self.active + count - 1) % count
                 } else {
-                    (self.active + 1) % self.docs.len()
-                }))
+                    (self.active + 1) % count
+                }));
             }
             Message::ZoomBy(amount) => {
                 return self.update(Message::Zoom(
@@ -639,7 +655,16 @@ impl App {
                 if let Some(doc) = self.docs.get_mut(self.active) {
                     doc.restore_viewport();
                 }
-                let result = self.flush();
+                match self.flush() {
+                    Ok(()) => self.last_error = None,
+                    Err(error) => {
+                        if self.last_error.as_ref() != Some(&error) {
+                            self.error = Some(error.clone());
+                            self.last_error = Some(error);
+                        }
+                    }
+                }
+                let result = self.flush_deferred(false);
                 self.report(result);
                 if self.reload.swap(false, Ordering::Relaxed) {
                     let loaded = config::load(&self.paths);
@@ -796,16 +821,26 @@ impl App {
                 let result = self.persist();
                 self.report(result);
                 if self.docs.is_empty() {
+                    let _ = self.flush_deferred(true);
                     return iced::exit();
                 }
                 self.refresh_search();
                 return operation::focus(EDITOR);
             }
             Message::Quit => {
-                if let Err(error) = self.persist() {
-                    self.error = Some(error);
-                } else {
+                if self.quit_pending {
                     return iced::exit();
+                }
+                match self.persist().and_then(|_| self.flush_deferred(true)) {
+                    Ok(()) => return iced::exit(),
+                    Err(error) => {
+                        self.quit_pending = true;
+                        self.error = Some(format!(
+                            "{error}\n\nYour unsaved drafts could not be stored, so they may \
+                             not be recovered next time. Save them to files first, or choose \
+                             Exit again to quit anyway."
+                        ));
+                    }
                 }
             }
             Message::ToggleReplace => {
@@ -840,6 +875,7 @@ impl App {
                 self.go_open = false;
                 self.discard_id = None;
                 self.error = None;
+                self.quit_pending = false;
                 self.find_open = false;
                 return operation::focus(EDITOR);
             }
