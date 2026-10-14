@@ -36,6 +36,17 @@ accompany each GitHub Release live in `docs/releases/<version>.md`.
 
 ### Fixed
 
+- Saving no longer replaces a read-only file through the atomic rename; it is
+  refused with a message suggesting Save As.
+- Zooming with the keyboard or wheel was reverted by the configuration watcher
+  echoing the app's own save; in-flight settings now survive that reload.
+- Several files failing to open at startup showed only the last error; all of
+  them are listed, each named.
+- An invalid theme name in the configuration is reported instead of silently
+  falling back.
+- Storage failures such as a full disk say what they mean for unsaved drafts.
+- Long tab titles are truncated on one line instead of wrapping.
+
 - The first visible editor line painted over the menu bar and became bold after
   partial redraws.
 

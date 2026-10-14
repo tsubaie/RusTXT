@@ -21,6 +21,9 @@ pub(super) const DEFAULT_FONT_SIZE: u32 = 11;
 impl App {
     pub(super) fn apply_appearance(&mut self) {
         let resolved = config::resolve_theme(&self.config.appearance.theme, &self.paths);
+        if let Some(note) = resolved.note.clone() {
+            self.report(Err(note));
+        }
         self.ui_palette = resolved.palette.clone();
         self.color_cache.set(None);
         self.theme = if let Some(p) = resolved.palette {
@@ -79,6 +82,9 @@ impl App {
         self.apply_appearance();
         self.settings_dirty = None;
         let result = config::save(&self.paths, &self.config);
+        if result.is_ok() {
+            self.written_config = Some(self.config.clone());
+        }
         self.report(result);
         Task::none()
     }

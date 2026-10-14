@@ -152,6 +152,9 @@ pub struct App {
     /// Active document selection, refreshed once per update for the view.
     selection: Range<usize>,
     settings_dirty: Option<Instant>,
+    /// The configuration the app last wrote, so the watcher's echo of our own
+    /// save is not mistaken for a user edit and does not revert pending changes.
+    written_config: Option<config::Config>,
     layout_dirty: Option<Instant>,
     last_inbox_poll: Instant,
     color_cache: crate::style::ColorCache,
@@ -244,6 +247,7 @@ impl App {
             search_stale: true,
             selection: 0..0,
             settings_dirty: None,
+            written_config: None,
             layout_dirty: None,
             last_inbox_poll: Instant::now(),
             color_cache: Default::default(),
@@ -333,9 +337,17 @@ impl App {
     fn doc_mut(&mut self) -> &mut Document {
         &mut self.docs[self.active]
     }
+    /// Show an error. One already on screen is kept and the new one appended,
+    /// so several failing files at startup do not hide each other.
     fn report(&mut self, result: Result<(), String>) {
         if let Err(error) = result {
-            self.error = Some(error);
+            self.error = Some(match self.error.take() {
+                Some(shown) if shown != error && shown.len() < 2000 => {
+                    format!("{shown}\n\n{error}")
+                }
+                Some(shown) => shown,
+                None => error,
+            });
         }
     }
     fn update(&mut self, message: Message) -> Task<Message> {

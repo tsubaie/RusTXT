@@ -125,7 +125,11 @@ impl App {
                 let base = button(
                     row![
                         dot,
-                        text(title).size(UI).width(Fill).align_x(iced::Center),
+                        text(title)
+                            .size(UI)
+                            .width(Fill)
+                            .align_x(iced::Center)
+                            .wrapping(text::Wrapping::None),
                         space::horizontal().width(22)
                     ]
                     .height(Fill)

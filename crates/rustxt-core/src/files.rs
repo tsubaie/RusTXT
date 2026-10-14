@@ -172,6 +172,18 @@ pub fn atomic_save(path: &Path, content: &[u8]) -> Result<(), String> {
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
     let existing_permissions = fs::metadata(&target).ok().map(|meta| meta.permissions());
+    // Replacing through a rename only needs a writable directory, which would
+    // silently overwrite a read-only file. Honour the file's own permissions.
+    if existing_permissions.is_some() {
+        if let Err(error) = fs::OpenOptions::new().write(true).open(&target) {
+            if error.kind() == std::io::ErrorKind::PermissionDenied {
+                return Err(format!(
+                    "{} is read-only; make it writable or use Save As",
+                    target.display()
+                ));
+            }
+        }
+    }
 
     // Only Unix adjusts the builder; keep the binding plain elsewhere.
     #[cfg_attr(not(unix), allow(unused_mut))]
@@ -225,6 +237,19 @@ mod tests {
         fs::write(&path, "old").unwrap();
         atomic_save(&path, b"new").unwrap();
         assert_eq!(fs::read_to_string(path).unwrap(), "new");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_save_refuses_a_read_only_file() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("locked.txt");
+        fs::write(&path, b"keep").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o444)).unwrap();
+        let error = atomic_save(&path, b"replaced").unwrap_err();
+        assert!(error.contains("read-only"), "{error}");
+        assert_eq!(fs::read(&path).unwrap(), b"keep");
     }
 
     #[test]

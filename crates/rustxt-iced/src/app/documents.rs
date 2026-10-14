@@ -50,6 +50,7 @@ impl App {
         if due(self.settings_dirty) {
             self.settings_dirty = None;
             config::save(&self.paths, &self.config)?;
+            self.written_config = Some(self.config.clone());
         }
         if due(self.layout_dirty) {
             self.layout_dirty = None;
@@ -86,7 +87,18 @@ impl App {
                 self.docs.push(Document::new(state));
                 self.active = self.docs.len() - 1;
             }
-            Err(error) => self.error = Some(error),
+            Err(error) => {
+                let name = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.display().to_string());
+                let error = if error.contains(&name) {
+                    error
+                } else {
+                    format!("{name}: {error}")
+                };
+                self.report(Err(error));
+            }
         }
     }
     fn write(&mut self, id: &str, path: PathBuf) -> Result<(), String> {
@@ -164,7 +176,11 @@ impl App {
                     Ok(()) => self.last_error = None,
                     Err(error) => {
                         if self.last_error.as_ref() != Some(&error) {
-                            self.error = Some(error.clone());
+                            self.report(Err(format!(
+                                "Your drafts could not be stored: {error}. Editing continues, \
+                                 but changes are not recoverable until storing works again; \
+                                 save important text to a file."
+                            )));
                             self.last_error = Some(error);
                         }
                     }
@@ -173,8 +189,11 @@ impl App {
                 self.report(result);
                 if self.reload.swap(false, Ordering::Relaxed) {
                     let loaded = config::load(&self.paths);
-                    if loaded.error.is_some() {
-                        self.error = loaded.error;
+                    if let Some(error) = loaded.error {
+                        self.report(Err(error));
+                    } else if self.written_config.as_ref() == Some(&loaded.config) {
+                        // Our own save coming back through the watcher; the
+                        // in-memory settings may already be ahead of it.
                     } else {
                         self.config = loaded.config;
                         self.apply_appearance();
