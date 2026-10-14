@@ -33,6 +33,13 @@ accompany each GitHub Release live in `docs/releases/<version>.md`.
 
 - `CHANGELOG.md`, `SECURITY.md`, `CONTRIBUTING.md`, `.editorconfig`, a bug
   report issue template, a pull request template, and `docs/configuration.md`.
+- `tools/iced-regressions-e2e.py`, run by `make e2e`: end-to-end checks for
+  the behaviours fixed after exploratory testing (word-wise undo, zoom
+  surviving the config watcher, all unopenable startup paths reported,
+  read-only files, the menu-bar seam, long tab titles).
+- `tools/iced-golden-e2e.py` (`make goldens`): golden screenshots of five UI
+  states at 100 % and 125 % scale, compared in CI against `tools/goldens/`
+  and refreshed with the `update_goldens` workflow input.
 
 ### Fixed
 

@@ -47,8 +47,12 @@ locally, the lint/test job in CI passes too.
 3. **Linux end-to-end tests** (`make e2e`): `tools/iced-e2e.py` drives the real
    release binary under Xvfb with xdotool (typing, undo/redo, kill-and-recover,
    tabs, find/replace, single-instance forwarding, CRLF saves, external-change
-   protection, settings, scroll recovery, clean exit) and
-   `tools/iced-rendering-e2e.py` checks hover redraws at 125 % scale. They
+   protection, settings, scroll recovery, clean exit),
+   `tools/iced-rendering-e2e.py` checks hover redraws at 125 % scale, and
+   `tools/iced-regressions-e2e.py` re-checks behaviours found broken by
+   exploratory testing (word-wise undo, zoom surviving the config watcher,
+   every unopenable startup path reported, read-only files refused, the
+   menu-bar seam after partial redraws, long tab titles on one line). They
    need:
 
    | Distribution | Packages |
@@ -57,17 +61,30 @@ locally, the lint/test job in CI passes too.
    | Arch | `xorg-server-xvfb xdotool imagemagick python` |
    | Fedora | `xorg-x11-server-Xvfb xdotool ImageMagick python3` |
 
-   Failures leave screenshots and logs in `target/iced-e2e` and
-   `target/iced-rendering-e2e`. The Arabic/English screenshot (`editor.png`) is
-   captured for manual review; it is not asserted on.
-4. **Native startup smoke test** (`python tools/iced-startup-smoke.py
+   Failures leave screenshots and logs in `target/iced-e2e`,
+   `target/iced-rendering-e2e` and `target/iced-regressions`. The
+   Arabic/English screenshot (`editor.png`) is captured for manual review; it
+   is not asserted on.
+4. **Golden screenshots** (`make goldens`): `tools/iced-golden-e2e.py`
+   captures the editor, the File menu, the Settings panel, the find bar and
+   the error dialog at 100 % and 125 % scale and compares them with
+   `tools/goldens/<state>@<scale>.png` (8 units per channel, at most 0.5 % of
+   pixels). The goldens are made on the CI Ubuntu image because fonts differ
+   elsewhere, so this layer is not part of `make e2e`; CI runs it after the
+   end-to-end tests whenever goldens are committed. To refresh them after an
+   intended visual change, run the CI workflow manually with `update_goldens`
+   ticked, download the `goldens` artifact, review each changed image and
+   commit it. `make goldens-update` does the same locally for the comparison
+   path only. Mismatches write `.actual.png` and `.diff.png` files into
+   `target/iced-golden`; see [tools/goldens/README.md](tools/goldens/README.md).
+5. **Native startup smoke test** (`python tools/iced-startup-smoke.py
    target/release`): runs in CI on Windows and macOS, and inside clean Arch,
    Debian, and Fedora containers against the installed packages. It checks
    Unicode filenames, forwarding a second launch into the first instance, and
    recovery after killing the process.
 
 CI runs layers 1–2 on Linux, Windows, Apple Silicon macOS, and Intel macOS,
-and layers 3–4 where the platform allows. The release workflow repeats all of
+and layers 3–5 where the platform allows. The release workflow repeats all of
 them before publishing.
 
 ## Vendored Iced patches
