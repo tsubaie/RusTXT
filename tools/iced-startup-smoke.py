@@ -1,37 +1,40 @@
-"""Exercise native startup, file forwarding and recovery with isolated data."""
-import os
-import hashlib
-from contextlib import closing
-from pathlib import Path
-import sqlite3
+"""Exercise native startup, file forwarding and recovery with isolated data.
+
+    python tools/iced-startup-smoke.py target/release        # directory or binary
+
+Runs without X11 tooling (natively on Windows/macOS, under xvfb-run for the
+installed Linux packages). The oracle is the session database: a document is
+"loaded" when its row's disk_fingerprint equals the SHA-256 of the bytes we
+wrote, and recovery after SIGKILL must reproduce the same rows.
+"""
 import subprocess
 import sys
 import tempfile
-import time
+from pathlib import Path
 
-binary = Path(sys.argv[1])
-if binary.is_dir():
-    binary /= 'rustxt-iced.exe' if os.name == 'nt' else 'rustxt-iced'
-binary = binary.resolve()
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from e2e_common import Database, log_tail, resolve_binary, sandbox_env, sha256, wait_for, wait_stable  # noqa: E402
+
+binary = resolve_binary(sys.argv[1])
+LOAD_TIMEOUT = 30
+"""Seconds for a cold start to load fonts and write the first snapshot."""
+STABILITY_WINDOW = 3
+"""Seconds the recovered instance must keep running; polled, so an early
+exit is reported immediately with its log."""
+
 with tempfile.TemporaryDirectory(prefix='rustxt-startup-') as directory:
     root = Path(directory)
-    env = dict(os.environ)
-    for kind in ('CONFIG', 'DATA', 'CACHE', 'STATE'):
-        env[f'XDG_{kind}_HOME'] = str(root / kind.lower())
-    env['APPDATA'] = str(root / 'config')
-    env['LOCALAPPDATA'] = str(root / 'local')
-    env['RUSTXT_DATA_DIR'] = str(root / 'session')
+    env = sandbox_env(root, data_dir='session')
     sample = root / 'مرحبا sample.txt'
     content = 'Native startup test\nمرحبا بالعالم\n'
     sample.write_bytes(content.encode('utf-8'))
     forwarded = root / 'forwarded.txt'
     forwarded.write_bytes(b'Second instance file\n')
-    database = root / 'session/session.db'
+    db = Database(root / 'session/session.db')
 
     with (root / 'app.log').open('w+') as log:
         def launch(*paths):
-            return subprocess.Popen([str(binary), *map(str, paths)], env=env,
-                                    stdout=log, stderr=log)
+            return subprocess.Popen([str(binary), *map(str, paths)], env=env, stdout=log, stderr=log)
 
         def stop(process):
             if process.poll() is None:
@@ -42,39 +45,35 @@ with tempfile.TemporaryDirectory(prefix='rustxt-startup-') as directory:
                     process.kill()
                     process.wait()
 
+        def crash(process):
+            """SIGKILL (TerminateProcess on Windows): no shutdown hook runs."""
+            process.kill()
+            process.wait(timeout=10)
+
         def wait_for_documents(process, expected):
-            deadline = time.monotonic() + 30
-            while time.monotonic() < deadline:
-                if process.poll() is not None:
-                    log.seek(0)
-                    raise AssertionError(f'Native app exited early ({process.returncode}): {log.read()}')
-                if database.exists():
-                    try:
-                        with closing(sqlite3.connect(database)) as db:
-                            actual = dict(db.execute('SELECT file_path, disk_fingerprint FROM documents WHERE is_open = 1'))
-                        if all(actual.get(str(path)) == hashlib.sha256(text.encode('utf-8')).hexdigest() for path, text in expected.items()):
-                            return
-                    except sqlite3.OperationalError:
-                        pass
-                time.sleep(0.1)
-            log.seek(0)
-            raise AssertionError(f'Native app did not recover expected file contents: {log.read()}')
+            """Until every expected path is open with the fingerprint of its bytes."""
+            wanted = {str(path): sha256(text) for path, text in expected.items()}
+            wait_for(lambda: all(db.open_fingerprints().get(path) == digest for path, digest in wanted.items()),
+                     f'Native app did not load {sorted(wanted)}', timeout=LOAD_TIMEOUT, process=process, log=log)
 
         process = launch(sample)
         try:
             wait_for_documents(process, {sample: content})
             second = launch(forwarded)
             try:
-                assert second.wait(timeout=15) == 0, 'Second instance failed to forward its file'
+                assert second.wait(timeout=15) == 0, f'Second instance failed to forward its file{log_tail(log)}'
             finally:
                 stop(second)
             expected = {sample: content, forwarded: 'Second instance file\n'}
             wait_for_documents(process, expected)
-            stop(process)
+            crash(process)
             process = launch()
             wait_for_documents(process, expected)
-            time.sleep(3)
-            assert process.poll() is None, 'Native app exited after recovery'
-            print('PASS: native startup, Unicode file loading, single-instance forwarding and session recovery')
+            wait_stable(process, STABILITY_WINDOW, 'Native app exited after recovery', log=log)
+            print('PASS: native startup, Unicode file loading, single-instance forwarding and crash recovery')
+        except Exception:
+            log.flush()
+            print(log_tail(log), file=sys.stderr, flush=True)
+            raise
         finally:
             stop(process)
