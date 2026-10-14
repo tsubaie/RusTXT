@@ -1,0 +1,16 @@
+# Weekly update PRs. Actions are SHA-pinned in the workflows, so Dependabot
+# bumps the SHA and the version comment together. Cargo updates arrive as one
+# grouped PR so `make check` runs once per week, not once per crate.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      cargo:
+        patterns: ["*"]

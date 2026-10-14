@@ -1,0 +1,55 @@
+# cargo-deny configuration. Run `cargo deny check` locally; CI runs the same.
+# Every target is evaluated (not just the host), so the Windows and macOS
+# dependency trees are covered too.
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+db-path = "$CARGO_HOME/advisory-dbs"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+# Vulnerabilities, unsound crates and yanked versions fail the check.
+yanked = "deny"
+# Unmaintained advisories are reported only for direct workspace dependencies;
+# transitive ones are the upstream crate's call (iced, winit, ...). Add an
+# advisory id here with a comment to accept it.
+unmaintained = "workspace"
+ignore = []
+
+[licenses]
+version = 2
+# Everything the dependency tree (all targets) is licensed under today, plus
+# the usual permissive set so a routine update does not trip the check.
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Zlib",
+  "Unicode-3.0",
+  "OFL-1.1",
+  "MPL-2.0",
+  "BSL-1.0",   # clipboard-win, error-code (Windows clipboard via iced/winit)
+  "CC0-1.0",   # notify (file watching in rustxt-core)
+]
+confidence-threshold = 0.8
+exceptions = []
+# Some of the allowed licenses are not in the tree yet; that is not a problem.
+unused-allowed-license = "allow"
+
+[bans]
+# Duplicate versions are reported but do not fail the check.
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+deny = []
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
