@@ -1,6 +1,6 @@
 //! Toolkit-independent core of RusTXT.
 //!
-//! Nothing in here knows about GTK. The GUI crate drives these modules and
+//! Nothing in here knows about the UI toolkit. The GUI crate drives these modules and
 //! stays a thin layer, which keeps documents, recovery storage, configuration
 //! and theme resolution unit-testable on their own.
 

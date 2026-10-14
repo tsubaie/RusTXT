@@ -1,11 +1,13 @@
 [workspace]
 resolver = "2"
-members = ["crates/rustxt-core", "crates/rustxt-gtk", "crates/rustxt-iced"]
+members = ["crates/rustxt-core", "crates/rustxt-iced"]
 default-members = ["crates/rustxt-iced"]
 
 [workspace.package]
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
+# Minimum supported Rust: iced 0.14 requires 1.88, verified by the CI MSRV job.
+rust-version = "1.88"
 license = "MIT"
 description = "A dead simple, recoverable plain text editor"
 repository = "https://github.com/tsubaie/RusTXT"

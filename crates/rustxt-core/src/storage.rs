@@ -7,7 +7,11 @@
 
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
-use std::{fs, path::Path};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 /// How many clean "closed for now" tabs (saved files) are retained for
 /// reopening. Tabs holding unsaved text are never pruned; only a discard
@@ -16,7 +20,10 @@ pub const MAX_CLOSED: i64 = 20;
 /// Longest first-line preview used to label a closed note.
 const PREVIEW_CHARS: usize = 40;
 /// How many recently closed tabs the UI lists.
-pub const LISTED_CLOSED: i64 = 10;
+const LISTED_CLOSED: i64 = 10;
+/// How many characters of a closed note are fetched to build its preview
+/// label: enough for any first line worth showing, without loading whole notes.
+const PREVIEW_FETCH: i64 = 2048;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum LineEnding {
@@ -28,6 +35,10 @@ pub enum LineEnding {
 }
 
 impl LineEnding {
+    /// Any `\r\n` at all makes the file CRLF, so a Windows file with a few
+    /// stray `\n` is written back the way it came. A file with only lone
+    /// `\r` (classic Mac) is treated as LF: nothing writes that style any
+    /// more, and the text is normalized to `\n` on load either way.
     pub fn detect(text: &str) -> Self {
         if text.contains("\r\n") {
             Self::Crlf
@@ -114,7 +125,7 @@ impl DocumentState {
 /// The label a closed note gets in the Recently closed menu: its first
 /// non-blank line, shortened, so notes are told apart by what they say
 /// instead of all reading "Untitled 1". Files keep their file name.
-pub fn preview_title(content: &str, fallback: &str) -> String {
+fn preview_title(content: &str, fallback: &str) -> String {
     let Some(line) = content.lines().map(str::trim).find(|line| !line.is_empty()) else {
         return fallback.to_string();
     };
@@ -133,20 +144,6 @@ pub struct ClosedDocument {
     pub file_path: Option<String>,
     pub dirty: bool,
     pub closed_at: i64,
-}
-
-impl ClosedDocument {
-    /// Text for the Recently closed menu entry: the title, an unsaved
-    /// marker when there is text not on disk, and underscores doubled
-    /// because GTK menu labels read a single underscore as a mnemonic.
-    pub fn menu_label(&self) -> String {
-        let title = self.title.replace('_', "__");
-        if self.dirty {
-            format!("{title} \u{2022}")
-        } else {
-            title
-        }
-    }
 }
 
 #[derive(Debug, Serialize)]
@@ -173,7 +170,14 @@ const SCHEMA: &str = "
         , disk_fingerprint TEXT
     );
     CREATE TABLE IF NOT EXISTS app_state (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS documents_is_open ON documents (is_open);
 ";
+
+/// Per-document frontend state (such as undo history) is stored in
+/// `app_state` under `<anything>:<document id>`. This predicate selects the
+/// rows belonging to the document bound as `?1`, by exact suffix rather than
+/// LIKE so ids containing `_` or `%` cannot match other documents' rows.
+const STATE_FOR_DOCUMENT: &str = "substr(key, length(key) - length(?1)) = ':' || ?1";
 
 const DOCUMENT_COLUMNS: &str =
     "id, file_path, title, content, dirty, cursor_offset, scroll_top, tab_position, line_ending, disk_fingerprint";
@@ -200,23 +204,49 @@ fn read_document(row: &Row) -> rusqlite::Result<DocumentState> {
 
 pub struct Storage {
     connection: Connection,
+    recovered_from: Option<PathBuf>,
 }
 
 impl Storage {
+    /// Open, or create, the recovery database. A database that can no
+    /// longer be opened, because the file is corrupt or written by something
+    /// else, is moved aside and replaced by an empty one rather than keeping
+    /// the editor from starting; [`Storage::recovered_from`] says where the
+    /// old file went so the user can be told.
     pub fn open(path: &Path) -> Result<Self, String> {
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(text)?;
+            create_private_dir(parent)?;
         }
-        let connection = Connection::open(path).map_err(text)?;
-        connection
-            .pragma_update(None, "journal_mode", "WAL")
-            .map_err(text)?;
-        connection.execute_batch(SCHEMA).map_err(text)?;
-        // Databases created by earlier versions predate these columns.
-        ensure_column(&connection, "closed_at", "INTEGER")?;
-        ensure_column(&connection, "line_ending", "TEXT NOT NULL DEFAULT 'LF'")?;
-        ensure_column(&connection, "disk_fingerprint", "TEXT")?;
-        Ok(Self { connection })
+        match connect(path) {
+            Ok(connection) => Ok(Self {
+                connection,
+                recovered_from: None,
+            }),
+            // Only a database SQLite itself reports as corrupt or not a
+            // database is replaced. A busy lock held by another process, a
+            // permission problem, or a full disk must not move drafts aside.
+            Err(ConnectError::Corrupt(error)) if path.exists() => {
+                let moved = move_aside(path).map_err(|rename_error| {
+                    format!("{error}; the file could not be moved aside either: {rename_error}")
+                })?;
+                let connection = connect(path).map_err(|retry| {
+                    let (ConnectError::Corrupt(retry) | ConnectError::Other(retry)) = retry;
+                    format!("{error}; a fresh database failed too: {retry}")
+                })?;
+                Ok(Self {
+                    connection,
+                    recovered_from: Some(moved),
+                })
+            }
+            Err(ConnectError::Corrupt(error)) | Err(ConnectError::Other(error)) => Err(error),
+        }
+    }
+
+    /// Where an unreadable database was moved to during [`Storage::open`],
+    /// if that happened. The session it held is gone; the file is kept for
+    /// the user to inspect or delete.
+    pub fn recovered_from(&self) -> Option<&Path> {
+        self.recovered_from.as_deref()
     }
 
     /// Write the recovery snapshot for one open document. A clean file-backed
@@ -315,16 +345,23 @@ impl Storage {
         transaction.commit().map_err(text)
     }
 
-    /// Close a tab. `discard` permanently deletes the recovery snapshot;
-    /// otherwise the snapshot is kept so the tab can be reopened.
+    /// Close a tab. `discard` permanently deletes the recovery snapshot and
+    /// any frontend state stored for the document; otherwise the snapshot is
+    /// kept so the tab can be reopened.
     pub fn close_document(&self, id: &str, discard: bool) -> Result<(), String> {
-        let statement = if discard {
-            "DELETE FROM documents WHERE id = ?1"
+        let transaction = self.connection.unchecked_transaction().map_err(text)?;
+        if discard {
+            delete_document(&transaction, id)?;
         } else {
-            "UPDATE documents SET is_open = 0, closed_at = unixepoch() WHERE id = ?1"
-        };
-        self.connection.execute(statement, [id]).map_err(text)?;
-        prune_closed(&self.connection)
+            transaction
+                .execute(
+                    "UPDATE documents SET is_open = 0, closed_at = unixepoch() WHERE id = ?1",
+                    [id],
+                )
+                .map_err(text)?;
+        }
+        prune_closed(&transaction)?;
+        transaction.commit().map_err(text)
     }
 
     pub fn restore_session(&self) -> Result<Session, String> {
@@ -358,12 +395,13 @@ impl Storage {
         let mut statement = self
             .connection
             .prepare(
-                "SELECT id, title, file_path, dirty, closed_at, content FROM documents
-                 WHERE is_open = 0 ORDER BY closed_at DESC, updated_at DESC LIMIT ?1",
+                "SELECT id, title, file_path, dirty, closed_at, substr(content, 1, ?2)
+                 FROM documents WHERE is_open = 0
+                 ORDER BY closed_at DESC, updated_at DESC LIMIT ?1",
             )
             .map_err(text)?;
         let closed = statement
-            .query_map([LISTED_CLOSED], |row| {
+            .query_map([LISTED_CLOSED, PREVIEW_FETCH], |row| {
                 let file_path: Option<String> = row.get(2)?;
                 let stored_title: String = row.get(1)?;
                 let title = if file_path.is_some() {
@@ -432,6 +470,116 @@ impl Storage {
     }
 }
 
+/// The data directory holds unsaved text, so it is created readable by its
+/// owner only. An existing directory keeps whatever mode it has.
+fn create_private_dir(dir: &Path) -> Result<(), String> {
+    let mut builder = fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+    builder.create(dir).map_err(text)
+}
+
+/// Open the database at `path` and bring its schema up to date. Any failure
+/// here means the file cannot be used as it is.
+/// Why a database could not be opened: corruption SQLite itself detected,
+/// which `Storage::open` recovers from, or anything else, which it reports.
+enum ConnectError {
+    Corrupt(String),
+    Other(String),
+}
+
+impl From<rusqlite::Error> for ConnectError {
+    fn from(error: rusqlite::Error) -> Self {
+        use rusqlite::ErrorCode::{DatabaseCorrupt, NotADatabase};
+        match error.sqlite_error_code() {
+            Some(DatabaseCorrupt) | Some(NotADatabase) => Self::Corrupt(error.to_string()),
+            _ => Self::Other(error.to_string()),
+        }
+    }
+}
+
+impl From<String> for ConnectError {
+    fn from(error: String) -> Self {
+        Self::Other(error)
+    }
+}
+
+fn connect(path: &Path) -> Result<Connection, ConnectError> {
+    // Create the file ourselves, owner-only, before SQLite does: the -wal
+    // and -shm files it adds later copy the main file's mode. The mode is
+    // also applied to a database created by an earlier version, which
+    // SQLite opened with the default umask.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o600)
+            .open(path)
+            .and_then(|_| fs::set_permissions(path, fs::Permissions::from_mode(0o600)))
+            .map_err(|e| ConnectError::Other(e.to_string()))?;
+    }
+    let connection = Connection::open(path)?;
+    connection.pragma_update(None, "journal_mode", "WAL")?;
+    // With WAL, synchronous=NORMAL still makes every committed transaction
+    // survive an application crash; only a power loss or OS crash can lose
+    // the last transactions, which is the same guarantee the user's files
+    // get from the filesystem. It avoids an fsync on every keystroke snapshot.
+    connection.pragma_update(None, "synchronous", "NORMAL")?;
+    // Overwrite freed pages with zeros so discarded text does not linger in
+    // the file after its row is deleted.
+    connection.pragma_update(None, "secure_delete", "ON")?;
+    connection.execute_batch(SCHEMA)?;
+    // Databases created by earlier versions predate these columns.
+    ensure_column(&connection, "closed_at", "INTEGER")?;
+    ensure_column(&connection, "line_ending", "TEXT NOT NULL DEFAULT 'LF'")?;
+    ensure_column(&connection, "disk_fingerprint", "TEXT")?;
+    Ok(connection)
+}
+
+/// Rename an unusable database and its WAL companions to
+/// `<name>.corrupt-<unix time>` so a fresh one can take their place.
+/// Returns the main file's new path.
+fn move_aside(path: &Path) -> Result<PathBuf, String> {
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs())
+        .unwrap_or(0);
+    let aside = |file: &Path| {
+        let mut name = file.file_name().unwrap_or_default().to_os_string();
+        name.push(format!(".corrupt-{stamp}"));
+        file.with_file_name(name)
+    };
+    let moved = aside(path);
+    fs::rename(path, &moved).map_err(text)?;
+    for suffix in ["-wal", "-shm"] {
+        let mut name = path.file_name().unwrap_or_default().to_os_string();
+        name.push(suffix);
+        let companion = path.with_file_name(name);
+        if companion.exists() {
+            fs::rename(&companion, aside(&companion)).map_err(text)?;
+        }
+    }
+    Ok(moved)
+}
+
+/// Remove a document together with the frontend state stored for it.
+fn delete_document(connection: &Connection, id: &str) -> Result<(), String> {
+    connection
+        .execute("DELETE FROM documents WHERE id = ?1", [id])
+        .map_err(text)?;
+    connection
+        .execute(
+            &format!("DELETE FROM app_state WHERE {STATE_FOR_DOCUMENT}"),
+            [id],
+        )
+        .map(drop)
+        .map_err(text)
+}
+
 fn ensure_column(connection: &Connection, name: &str, definition: &str) -> Result<(), String> {
     let exists: i64 = connection
         .query_row(
@@ -454,24 +602,35 @@ fn ensure_column(connection: &Connection, name: &str, definition: &str) -> Resul
 /// Closed tabs are kept so they can be reopened, within limits. An empty
 /// untitled tab has nothing to recover and is dropped. Tabs with unsaved
 /// text are kept until the user discards them. Everything else, which is
-/// saved files, is capped at the most recent [`MAX_CLOSED`].
+/// saved files, is capped at the most recent [`MAX_CLOSED`]. Pruned
+/// documents take their frontend state with them. Callers run this inside
+/// a transaction so the selection and the deletes see the same rows.
 fn prune_closed(connection: &Connection) -> Result<(), String> {
-    connection
-        .execute(
-            "DELETE FROM documents WHERE is_open = 0 AND file_path IS NULL
-                AND trim(content, ' \t\r\n') = ''",
-            [],
-        )
-        .map_err(text)?;
-    connection
-        .execute(
-            "DELETE FROM documents WHERE is_open = 0 AND dirty = 0 AND id NOT IN (
-                SELECT id FROM documents WHERE is_open = 0 AND dirty = 0
-                ORDER BY closed_at DESC, updated_at DESC LIMIT ?1)",
-            [MAX_CLOSED],
-        )
-        .map(drop)
-        .map_err(text)
+    // Blankness is judged on the first characters only, so a huge note is
+    // never loaded just to be pruned; one longer than that is simply kept.
+    let blank = format!(
+        "is_open = 0 AND file_path IS NULL AND length(content) <= {PREVIEW_FETCH}
+            AND trim(substr(content, 1, {PREVIEW_FETCH}), ' \t\r\n') = ''"
+    );
+    let surplus = "is_open = 0 AND dirty = 0 AND id NOT IN (
+            SELECT id FROM documents WHERE is_open = 0 AND dirty = 0
+            ORDER BY closed_at DESC, updated_at DESC LIMIT ?1)";
+    for (condition, parameters) in [(blank.as_str(), vec![]), (surplus, vec![MAX_CLOSED])] {
+        let mut statement = connection
+            .prepare(&format!("SELECT id FROM documents WHERE {condition}"))
+            .map_err(text)?;
+        let ids = statement
+            .query_map(rusqlite::params_from_iter(parameters), |row| {
+                row.get::<_, String>(0)
+            })
+            .map_err(text)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(text)?;
+        for id in ids {
+            delete_document(connection, &id)?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -523,21 +682,169 @@ mod tests {
         assert_eq!(file.title, "f.txt", "files keep their name");
     }
 
+    #[cfg(unix)]
     #[test]
-    fn menu_label_marks_unsaved_text_and_escapes_mnemonics() {
-        let closed = ClosedDocument {
-            id: "x".into(),
-            title: "my_notes".into(),
-            file_path: None,
-            dirty: true,
-            closed_at: 0,
-        };
-        assert_eq!(closed.menu_label(), "my__notes \u{2022}");
-        let clean = ClosedDocument {
-            dirty: false,
-            ..closed
-        };
-        assert_eq!(clean.menu_label(), "my__notes");
+    fn database_and_its_directory_are_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let data = dir.path().join("share/rustxt");
+        let path = data.join("session.db");
+        let storage = Storage::open(&path).unwrap();
+        storage.save_snapshot(&document("a", 0)).unwrap();
+        let mode = |file: &Path| fs::metadata(file).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&data), 0o700);
+        assert_eq!(mode(&path), 0o600);
+        assert_eq!(mode(&data.join("session.db-wal")), 0o600);
+        // A database left world-readable by an earlier version is tightened.
+        drop(storage);
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        let _storage = Storage::open(&path).unwrap();
+        assert_eq!(mode(&path), 0o600);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_unreadable_but_healthy_database_is_not_moved_aside() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("session.db");
+        drop(Storage::open(&path).unwrap());
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o000)).unwrap();
+        let error = Storage::open(&path)
+            .err()
+            .expect("open fails without permissions");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        assert!(path.exists(), "the database stays in place: {error}");
+        assert!(
+            !fs::read_dir(dir.path()).unwrap().any(|entry| entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .contains("corrupt")),
+            "nothing was moved aside"
+        );
+        assert!(Storage::open(&path).unwrap().recovered_from().is_none());
+    }
+
+    #[test]
+    fn corrupt_database_is_moved_aside_and_replaced() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("session.db");
+        fs::write(&path, b"this is not a database").unwrap();
+
+        let storage = Storage::open(&path).unwrap();
+
+        let moved = storage.recovered_from().expect("recovery is reported");
+        assert_eq!(fs::read(moved).unwrap(), b"this is not a database");
+        let moved_name = moved.file_name().unwrap().to_str().unwrap();
+        assert!(
+            moved_name.starts_with("session.db.corrupt-"),
+            "{moved_name}"
+        );
+        storage.save_snapshot(&document("a", 0)).unwrap();
+        assert_eq!(storage.restore_session().unwrap().documents.len(), 1);
+        assert!(
+            Storage::open(&path).unwrap().recovered_from().is_none(),
+            "a healthy database opens without a notice"
+        );
+    }
+
+    #[test]
+    fn moving_aside_takes_the_wal_companions_along() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("session.db");
+        for name in ["session.db", "session.db-wal", "session.db-shm"] {
+            fs::write(dir.path().join(name), name).unwrap();
+        }
+        let moved = move_aside(&path).unwrap();
+        let stamp = moved
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .strip_prefix("session.db.corrupt-")
+            .unwrap()
+            .to_string();
+        for name in ["session.db", "session.db-wal", "session.db-shm"] {
+            assert!(!dir.path().join(name).exists(), "{name} was left behind");
+            let aside = dir.path().join(format!("{name}.corrupt-{stamp}"));
+            assert_eq!(fs::read_to_string(&aside).unwrap(), name);
+        }
+    }
+
+    #[test]
+    fn discard_removes_the_frontend_state_of_that_document_only() {
+        let (_dir, storage) = storage();
+        storage.save_snapshot(&document("a", 0)).unwrap();
+        storage.save_snapshot(&document("ab", 1)).unwrap();
+        storage.set_state("iced-history:a", "history").unwrap();
+        storage.set_state("iced-history:ab", "other").unwrap();
+        storage.set_state("window", "800 600").unwrap();
+
+        storage.close_document("a", true).unwrap();
+
+        assert_eq!(storage.get_state("iced-history:a").unwrap(), None);
+        assert_eq!(
+            storage.get_state("iced-history:ab").unwrap().as_deref(),
+            Some("other"),
+            "only an exact `:<id>` suffix matches"
+        );
+        assert_eq!(
+            storage.get_state("window").unwrap().as_deref(),
+            Some("800 600")
+        );
+        storage.close_document("ab", false).unwrap();
+        assert_eq!(
+            storage.get_state("iced-history:ab").unwrap().as_deref(),
+            Some("other"),
+            "closing for now keeps the state for reopening"
+        );
+    }
+
+    #[test]
+    fn pruning_removes_the_frontend_state_of_pruned_documents() {
+        let (_dir, mut storage) = storage();
+        let mut blank = document("blank", 0);
+        blank.content = "  \n".into();
+        storage.save_snapshot(&blank).unwrap();
+        storage.set_state("iced-history:blank", "x").unwrap();
+        for index in 0..(MAX_CLOSED + 1) {
+            let id = format!("file{index}");
+            storage.save_snapshot(&saved_file(&id, index + 1)).unwrap();
+            storage
+                .set_state(&format!("iced-history:{id}"), "x")
+                .unwrap();
+        }
+        // Closing everything through a layout update prunes the blank note
+        // and one surplus saved file in the same transaction.
+        storage.update_layout(&[], "").unwrap();
+
+        assert_eq!(storage.get_state("iced-history:blank").unwrap(), None);
+        assert_eq!(closed_count(&storage), MAX_CLOSED);
+        let file_states: i64 = storage
+            .connection
+            .query_row(
+                "SELECT COUNT(*) FROM app_state WHERE key LIKE 'iced-history:file%'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(file_states, MAX_CLOSED, "the pruned file's state went too");
+    }
+
+    #[test]
+    fn closed_tabs_are_indexed() {
+        let (_dir, storage) = storage();
+        let indexed: i64 = storage
+            .connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index'
+                 AND name = 'documents_is_open'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(indexed, 1);
     }
 
     #[test]

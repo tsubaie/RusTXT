@@ -4,6 +4,35 @@ use iced::{
     Background, Border, Color, Shadow, Theme, Vector,
 };
 use rustxt_core::config::Palette;
+use std::cell::Cell;
+
+/// Memo of the last theme palette seen and the colours derived from it.
+pub type ColorCache = Cell<Option<(iced::theme::Palette, Colors)>>;
+
+/// Hands style closures their [`Colors`], computing them once per theme
+/// instead of once per widget per frame. Copyable so closures can capture it.
+#[derive(Clone, Copy)]
+pub struct Resolver<'a> {
+    cache: &'a ColorCache,
+    palette: Option<&'a Palette>,
+}
+
+impl<'a> Resolver<'a> {
+    pub fn new(cache: &'a ColorCache, palette: Option<&'a Palette>) -> Self {
+        Self { cache, palette }
+    }
+    pub fn get(self, theme: &Theme) -> Colors {
+        let key = theme.palette();
+        if let Some((cached, colors)) = self.cache.get() {
+            if cached == key {
+                return colors;
+            }
+        }
+        let colors = Colors::new(theme, self.palette);
+        self.cache.set(Some((key, colors)));
+        colors
+    }
+}
 
 #[derive(Clone, Copy)]
 pub struct Colors {

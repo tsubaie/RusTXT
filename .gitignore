@@ -5,3 +5,5 @@
 *.pkg.tar.zst
 /packaging/arch/pkg
 /packaging/arch/src
+/dist
+__pycache__/

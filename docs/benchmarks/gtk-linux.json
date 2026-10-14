@@ -1,5 +1,5 @@
 {
-  "binary": "/tmp/rustxt-iced-baseline/rustxt-gtk",
+  "binary": "rustxt-gtk",
   "binary_bytes": 4589160,
   "sha256": "6687bb791dc44ee03914150a45368178ef93e9821b3bf3dec9f5741888bba1c8",
   "runs": [

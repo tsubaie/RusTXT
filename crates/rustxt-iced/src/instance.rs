@@ -2,6 +2,7 @@
 use fs2::FileExt;
 use std::{
     fs::{self, File, OpenOptions},
+    io,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -45,17 +46,38 @@ impl Instance {
             Err(error) => Err(error.to_string()),
         }
     }
+    /// Collect messages left by later launches. A file that cannot be read or
+    /// parsed is set aside as `.bad` (or removed) rather than reported on
+    /// every poll, and a missing inbox directory is recreated.
     pub fn receive(&self) -> Result<Vec<Vec<PathBuf>>, String> {
         let mut messages = Vec::new();
-        for entry in fs::read_dir(&self.inbox).map_err(|e| e.to_string())? {
-            let path = entry.map_err(|e| e.to_string())?.path();
+        let entries = match fs::read_dir(&self.inbox) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                fs::create_dir_all(&self.inbox).map_err(|e| e.to_string())?;
+                return Ok(messages);
+            }
+            Err(error) => return Err(error.to_string()),
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
             if path.extension().and_then(|e| e.to_str()) != Some("json") {
                 continue;
             }
-            let content = fs::read(&path).map_err(|e| e.to_string())?;
-            messages
-                .push(serde_json::from_slice::<Vec<PathBuf>>(&content).map_err(|e| e.to_string())?);
-            fs::remove_file(path).map_err(|e| e.to_string())?;
+            let parsed = fs::read(&path)
+                .ok()
+                .and_then(|content| serde_json::from_slice::<Vec<PathBuf>>(&content).ok());
+            match parsed {
+                Some(message) => {
+                    fs::remove_file(&path).map_err(|e| e.to_string())?;
+                    messages.push(message);
+                }
+                None => {
+                    if fs::rename(&path, path.with_extension("bad")).is_err() {
+                        let _ = fs::remove_file(&path);
+                    }
+                }
+            }
         }
         Ok(messages)
     }
@@ -74,5 +96,28 @@ mod tests {
         assert!(first.receive().unwrap().is_empty());
         drop(first);
         assert!(Instance::acquire(dir.path(), &[]).unwrap().is_some());
+    }
+    #[test]
+    fn unparsable_inbox_files_are_set_aside_and_a_missing_inbox_is_recreated() {
+        let dir = tempfile::tempdir().unwrap();
+        let instance = Instance::acquire(dir.path(), &[]).unwrap().unwrap();
+        let inbox = dir.path().join("iced-inbox");
+        fs::write(inbox.join("broken.json"), b"{not json").unwrap();
+        fs::write(inbox.join("notes.txt"), b"ignored").unwrap();
+        let good = vec![dir.path().join("ok.txt")];
+        fs::write(
+            inbox.join("good.json"),
+            serde_json::to_vec(&[good[0].to_string_lossy()]).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(instance.receive().unwrap(), vec![good]);
+        assert!(!inbox.join("broken.json").exists());
+        assert!(inbox.join("broken.bad").exists());
+        assert!(inbox.join("notes.txt").exists());
+        assert!(instance.receive().unwrap().is_empty());
+        fs::remove_dir_all(&inbox).unwrap();
+        assert!(instance.receive().unwrap().is_empty());
+        assert!(inbox.is_dir());
+        assert!(instance.receive().unwrap().is_empty());
     }
 }

@@ -29,7 +29,9 @@ pub use settings::Settings;
 pub use geometry::Geometry;
 
 use crate::core::renderer;
-use crate::core::{Background, Color, Font, Pixels, Point, Rectangle, Size, Transformation};
+use crate::core::{
+    Background, Color, Font, Pixels, Point, Rectangle, Size, Transformation,
+};
 use crate::engine::Engine;
 use crate::graphics::Viewport;
 use crate::graphics::compositor;
@@ -90,7 +92,9 @@ impl Renderer {
             pixels.fill_path(
                 &path,
                 &tiny_skia::Paint {
-                    shader: tiny_skia::Shader::SolidColor(engine::into_color(background_color)),
+                    shader: tiny_skia::Shader::SolidColor(engine::into_color(
+                        background_color,
+                    )),
                     anti_alias: false,
                     blend_mode: tiny_skia::BlendMode::Source,
                     ..Default::default()
@@ -101,7 +105,8 @@ impl Renderer {
             );
 
             for layer in self.layers.iter() {
-                let Some(layer_bounds) = damage_bounds.intersection(&(layer.bounds * scale_factor))
+                let Some(layer_bounds) =
+                    damage_bounds.intersection(&(layer.bounds * scale_factor))
                 else {
                     continue;
                 };
@@ -127,8 +132,9 @@ impl Renderer {
                     let render_span = debug::render(debug::Primitive::Triangle);
 
                     for group in &layer.primitives {
-                        let Some(group_bounds) =
-                            (group.clip_bounds() * scale_factor).intersection(&layer_bounds)
+                        let Some(group_bounds) = (group.clip_bounds()
+                            * scale_factor)
+                            .intersection(&layer_bounds)
                         else {
                             continue;
                         };
@@ -138,7 +144,8 @@ impl Renderer {
                         for primitive in group.as_slice() {
                             self.engine.draw_primitive(
                                 primitive,
-                                Transformation::scale(scale_factor) * group.transformation(),
+                                Transformation::scale(scale_factor)
+                                    * group.transformation(),
                                 pixels,
                                 clip_mask,
                                 group_bounds,
@@ -174,7 +181,8 @@ impl Renderer {
                         for text in group.as_slice() {
                             self.engine.draw_text(
                                 text,
-                                Transformation::scale(scale_factor) * group.transformation(),
+                                Transformation::scale(scale_factor)
+                                    * group.transformation(),
                                 pixels,
                                 clip_mask,
                                 layer_bounds,
@@ -208,7 +216,11 @@ impl core::Renderer for Renderer {
         self.layers.pop_transformation();
     }
 
-    fn fill_quad(&mut self, quad: renderer::Quad, background: impl Into<Background>) {
+    fn fill_quad(
+        &mut self,
+        quad: renderer::Quad,
+        background: impl Into<Background>,
+    ) {
         let (layer, transformation) = self.layers.current_mut();
         layer.draw_quad(quad, background.into(), transformation);
     }
@@ -220,7 +232,9 @@ impl core::Renderer for Renderer {
     fn allocate_image(
         &mut self,
         _handle: &core::image::Handle,
-        callback: impl FnOnce(Result<core::image::Allocation, core::image::Error>) + Send + 'static,
+        callback: impl FnOnce(Result<core::image::Allocation, core::image::Error>)
+        + Send
+        + 'static,
     ) {
         #[cfg(feature = "image")]
         #[allow(unsafe_code)]
@@ -263,7 +277,13 @@ impl core::text::Renderer for Renderer {
     ) {
         let (layer, transformation) = self.layers.current_mut();
 
-        layer.draw_paragraph(text, position, color, clip_bounds, transformation);
+        layer.draw_paragraph(
+            text,
+            position,
+            color,
+            clip_bounds,
+            transformation,
+        );
     }
 
     fn fill_editor(
@@ -315,7 +335,11 @@ impl graphics::geometry::Renderer for Renderer {
                 text,
                 clip_bounds,
             } => {
-                layer.draw_primitive_group(primitives, clip_bounds, transformation);
+                layer.draw_primitive_group(
+                    primitives,
+                    clip_bounds,
+                    transformation,
+                );
 
                 for image in images {
                     layer.draw_image(image, transformation);
@@ -324,13 +348,21 @@ impl graphics::geometry::Renderer for Renderer {
                 layer.draw_text_group(text, clip_bounds, transformation);
             }
             Geometry::Cache(cache) => {
-                layer.draw_primitive_cache(cache.primitives, cache.clip_bounds, transformation);
+                layer.draw_primitive_cache(
+                    cache.primitives,
+                    cache.clip_bounds,
+                    transformation,
+                );
 
                 for image in cache.images.iter() {
                     layer.draw_image(image.clone(), transformation);
                 }
 
-                layer.draw_text_cache(cache.text, cache.clip_bounds, transformation);
+                layer.draw_text_cache(
+                    cache.text,
+                    cache.clip_bounds,
+                    transformation,
+                );
             }
         }
     }
@@ -357,11 +389,19 @@ impl core::image::Renderer for Renderer {
         self.engine.raster_pipeline.load(handle)
     }
 
-    fn measure_image(&self, handle: &Self::Handle) -> Option<crate::core::Size<u32>> {
+    fn measure_image(
+        &self,
+        handle: &Self::Handle,
+    ) -> Option<crate::core::Size<u32>> {
         self.engine.raster_pipeline.dimensions(handle)
     }
 
-    fn draw_image(&mut self, image: core::Image, bounds: Rectangle, clip_bounds: Rectangle) {
+    fn draw_image(
+        &mut self,
+        image: core::Image,
+        bounds: Rectangle,
+        clip_bounds: Rectangle,
+    ) {
         let (layer, transformation) = self.layers.current_mut();
         layer.draw_raster(image, bounds, clip_bounds, transformation);
     }
@@ -369,11 +409,19 @@ impl core::image::Renderer for Renderer {
 
 #[cfg(feature = "svg")]
 impl core::svg::Renderer for Renderer {
-    fn measure_svg(&self, handle: &core::svg::Handle) -> crate::core::Size<u32> {
+    fn measure_svg(
+        &self,
+        handle: &core::svg::Handle,
+    ) -> crate::core::Size<u32> {
         self.engine.vector_pipeline.viewport_dimensions(handle)
     }
 
-    fn draw_svg(&mut self, svg: core::Svg, bounds: Rectangle, clip_bounds: Rectangle) {
+    fn draw_svg(
+        &mut self,
+        svg: core::Svg,
+        bounds: Rectangle,
+        clip_bounds: Rectangle,
+    ) {
         let (layer, transformation) = self.layers.current_mut();
         layer.draw_svg(svg, bounds, clip_bounds, transformation);
     }
@@ -389,7 +437,9 @@ impl renderer::Headless for Renderer {
         default_text_size: Pixels,
         backend: Option<&str>,
     ) -> Option<Self> {
-        if backend.is_some_and(|backend| !["tiny-skia", "tiny_skia"].contains(&backend)) {
+        if backend.is_some_and(|backend| {
+            !["tiny-skia", "tiny_skia"].contains(&backend)
+        }) {
             return None;
         }
 
@@ -420,7 +470,8 @@ mod redraw_tests {
     #[test]
     fn shadowed_panel_partial_redraw_matches_full_render() {
         for scale in [1.0, 1.25, 1.5, 2.0] {
-            let size = Size::new((240.0 * scale) as u32, (180.0 * scale) as u32);
+            let size =
+                Size::new((240.0 * scale) as u32, (180.0 * scale) as u32);
             let viewport = Viewport::with_physical_size(size, scale);
             let mut renderer = Renderer::new(Font::DEFAULT, Pixels(14.0));
             crate::core::Renderer::fill_quad(
@@ -445,8 +496,10 @@ mod redraw_tests {
                 },
                 Color::from_rgb8(49, 50, 68),
             );
-            let mut pixels = tiny_skia::Pixmap::new(size.width, size.height).unwrap();
-            let mut mask = tiny_skia::Mask::new(size.width, size.height).unwrap();
+            let mut pixels =
+                tiny_skia::Pixmap::new(size.width, size.height).unwrap();
+            let mut mask =
+                tiny_skia::Mask::new(size.width, size.height).unwrap();
             let background = Color::from_rgb8(30, 30, 46);
             renderer.draw(
                 &mut pixels.as_mut(),
@@ -493,10 +546,90 @@ mod redraw_tests {
                     assert!(
                         mismatch.is_none(),
                         "partial redraw changed pixel {:?} at scale {scale}, frame {frame}, damage {damage:?}",
-                        mismatch
-                            .map(|i| (i / 4 % size.width as usize, i / 4 / size.width as usize))
+                        mismatch.map(|i| (
+                            i / 4 % size.width as usize,
+                            i / 4 / size.width as usize
+                        ))
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn scrolled_editor_text_stays_inside_its_bounds() {
+        use crate::core::text::{self, Editor as _, LineHeight, Wrapping};
+
+        let text = "fdfdffgh\n".repeat(40);
+        for scale in [1.0, 1.25, 1.5, 2.0] {
+            let size =
+                Size::new((240.0 * scale) as u32, (180.0 * scale) as u32);
+            let viewport = Viewport::with_physical_size(size, scale);
+            let mut renderer = Renderer::new(Font::DEFAULT, Pixels(14.0));
+            let text_bounds = Rectangle {
+                x: 12.0,
+                y: 60.0,
+                width: 200.0,
+                height: 100.0,
+            };
+            let mut editor = graphics::text::Editor::with_text(&text);
+            editor.update(
+                text_bounds.size(),
+                Font::MONOSPACE,
+                Pixels(14.0),
+                LineHeight::default(),
+                Wrapping::None,
+                &mut text::highlighter::PlainText,
+            );
+            // Half a line past line 3, so the first laid-out line straddles the top edge.
+            editor.set_scroll_position(3, 9.0, 0.0);
+            crate::core::text::Renderer::fill_editor(
+                &mut renderer,
+                &editor,
+                text_bounds.position(),
+                Color::WHITE,
+                text_bounds,
+            );
+            let mut pixels =
+                tiny_skia::Pixmap::new(size.width, size.height).unwrap();
+            let mut mask =
+                tiny_skia::Mask::new(size.width, size.height).unwrap();
+            let background = Color::from_rgb8(30, 30, 46);
+            let full = Rectangle::with_size(viewport.logical_size());
+            renderer.draw(
+                &mut pixels.as_mut(),
+                &mut mask,
+                &viewport,
+                &[full],
+                background,
+            );
+            let reference = pixels.data().to_vec();
+            let corner = reference[..4].to_vec();
+            let row = size.width as usize * 4;
+            let top = (text_bounds.y * scale) as usize * row;
+            let outside =
+                reference[..top].chunks(4).position(|px| px != &corner[..]);
+            assert!(
+                outside.is_none(),
+                "editor text painted above its bounds at scale {scale}, pixel {:?}",
+                outside.map(|i| (
+                    i % size.width as usize,
+                    i / size.width as usize
+                ))
+            );
+            // Typing/caret blinks damage only the editor; nothing may accumulate.
+            for frame in 0..8 {
+                renderer.draw(
+                    &mut pixels.as_mut(),
+                    &mut mask,
+                    &viewport,
+                    &[text_bounds],
+                    background,
+                );
+                assert!(
+                    pixels.data() == &reference[..],
+                    "partial editor redraw changed pixels at scale {scale}, frame {frame}"
+                );
             }
         }
     }

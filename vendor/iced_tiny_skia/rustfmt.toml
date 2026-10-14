@@ -1,0 +1,4 @@
+# Upstream iced's rustfmt settings (iced-rs/iced rustfmt.toml at 0.14.0), so
+# the diff against the published crate only shows the documented patches.
+max_width = 80
+edition = "2024"

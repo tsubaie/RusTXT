@@ -1,0 +1,5 @@
+# Everyone (and CI) builds with current stable; the MSRV job in ci.yml proves
+# the floor declared as rust-version in Cargo.toml still compiles.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]

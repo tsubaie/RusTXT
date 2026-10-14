@@ -5,6 +5,7 @@ mod document;
 mod fonts;
 mod icons;
 mod instance;
+mod platform;
 mod search;
 mod style;
 

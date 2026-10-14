@@ -1,14 +1,16 @@
 name: Release
 
-# Push a tag like v0.2.0 to build native packages and publish a GitHub Release.
+# Push a tag like v0.5.0 to build native packages and publish a GitHub Release.
+# A manual run builds and smoke-tests everything without publishing.
 on:
   push:
-    tags: ["v*"]
-    branches: ["feat/iced-cross-platform"]
+    # Only release versions; archival tags such as v0.4.1-gtk must not start a build.
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
   workflow_dispatch:
 
+# Read-only by default; only the publishing job asks for more.
 permissions:
-  contents: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -21,52 +23,66 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Tag must match Cargo package version
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        with:
+          toolchain: stable
+      - name: Tag must match the Cargo version and have release notes
         id: version
         run: |
           set -eu
-          tag_version="${GITHUB_REF_NAME#v}"
-          cargo_version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "rustxt-iced") | .version')"
+          cargo_version="$(cargo metadata --no-deps --format-version 1 --locked | jq -r '.packages[] | select(.name == "rustxt-iced") | .version')"
           echo "version=$cargo_version" >> "$GITHUB_OUTPUT"
           if [ "$GITHUB_REF_TYPE" = tag ]; then
-          test "$tag_version" = "$cargo_version" || {
-            echo "Tag version $tag_version does not match Cargo version $cargo_version" >&2
+            tag_version="${GITHUB_REF_NAME#v}"
+            test "$tag_version" = "$cargo_version" || {
+              echo "Tag version $tag_version does not match Cargo version $cargo_version" >&2
+              exit 1
+            }
+          fi
+          notes="docs/releases/$cargo_version.md"
+          test -f "$notes" || {
+            echo "Release notes $notes are missing; the release body is read from there" >&2
             exit 1
           }
-          fi
 
+  # Every packaging job writes <artifact>.sha256 next to what it built, so the
+  # release job assembles SHA256SUMS from the producers' own hashes and verifies
+  # the downloaded artifacts against them instead of hashing them again.
   arch:
     name: Arch package
     runs-on: ubuntu-latest
     needs: validate
     container: archlinux:base-devel
+    env:
+      VERSION: ${{ needs.validate.outputs.version }}
     steps:
-      - name: Install toolchain and desktop libraries
-        run: pacman -Syu --noconfirm rust libxkbcommon libxkbcommon-x11 wayland libx11 libxcursor libxi fontconfig git sudo
-      - uses: actions/checkout@v4
-      # Restores the cache CI keeps warm on main, so this is usually a link step.
-      - name: Cache cargo registry and build output
-        uses: Swatinem/rust-cache@v2
+      - name: Install desktop libraries
+        run: pacman -Syu --noconfirm libxkbcommon libxkbcommon-x11 wayland libx11 libxcursor libxi fontconfig git sudo
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
         with:
-          shared-key: arch-linux
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
           cache-on-failure: true
-      - name: Version from tag
-        run: echo "VERSION=${{ needs.validate.outputs.version }}" >> "$GITHUB_ENV"
       - name: Build
         run: cargo build --release --locked -p rustxt-iced
       # makepkg refuses to run as root and would rebuild from scratch in its own
       # cargo home, so build above with the cache and let it only package (-R).
+      # -d: cargo comes from rustup, not pacman, so skip the makedepends check.
       - name: Package for Arch
         run: |
           useradd -m builder
           chown -R builder .
           sed -i "s/^pkgver=.*/pkgver=$VERSION/" packaging/arch/PKGBUILD
           cd packaging/arch
-          sudo -u builder makepkg -Rf --noconfirm
-      - name: Collect Arch package
-        run: mkdir -p dist && cp packaging/arch/*.pkg.tar.zst dist/
-      - uses: actions/upload-artifact@v4
+          sudo -u builder makepkg -Rfd --noconfirm
+      - name: Collect and checksum
+        run: |
+          mkdir -p dist && cp packaging/arch/*.pkg.tar.zst dist/
+          cd dist && for f in *; do sha256sum "$f" > "$f.sha256"; done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: arch
           path: dist/*
@@ -82,22 +98,25 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends build-essential curl ca-certificates pkg-config dpkg-dev git \
             libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libfontconfig1-dev libx11-dev libx11-xcb1 libxcursor1 libxrandr-dev libxi-dev
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        with:
+          toolchain: stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Cache cargo registry, build output and cargo-deb
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           cache-on-failure: true
       # Prebuilt binary when one exists, otherwise a source build; either way the
       # result lands in ~/.cargo/bin and is cached for the next release.
-      - uses: cargo-bins/cargo-binstall@9ef12faecb70a6811561bc924b14c09230a9b77e
+      - uses: cargo-bins/cargo-binstall@3be4ad2b146f3302f92e5956c54fedbb6ae8cccc # v1.25.3
       - name: Install cargo-deb
         run: cargo binstall -y --locked cargo-deb
       - name: Build .deb
         run: |
           cargo deb -p rustxt-iced --locked
           mkdir -p dist && cp target/debian/*.deb dist/
-      - uses: actions/upload-artifact@v4
+          cd dist && for f in *; do sha256sum "$f" > "$f.sha256"; done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: deb
           path: dist/*
@@ -110,13 +129,15 @@ jobs:
     steps:
       - name: Install build dependencies
         run: dnf install -y gcc pkgconf-pkg-config curl git rpm-build libxkbcommon-devel wayland-devel fontconfig-devel libX11-devel libXrandr-devel libXi-devel
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        with:
+          toolchain: stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Cache cargo registry, build output and cargo-generate-rpm
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           cache-on-failure: true
-      - uses: cargo-bins/cargo-binstall@9ef12faecb70a6811561bc924b14c09230a9b77e
+      - uses: cargo-bins/cargo-binstall@3be4ad2b146f3302f92e5956c54fedbb6ae8cccc # v1.25.3
       - name: Install cargo-generate-rpm
         run: cargo binstall -y --locked cargo-generate-rpm
       - name: Build .rpm
@@ -124,7 +145,8 @@ jobs:
           cargo build --release --locked -p rustxt-iced
           cargo generate-rpm -p crates/rustxt-iced
           mkdir -p dist && cp target/generate-rpm/*.rpm dist/
-      - uses: actions/upload-artifact@v4
+          cd dist && for f in *; do sha256sum "$f" > "$f.sha256"; done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: rpm
           path: dist/*
@@ -141,9 +163,11 @@ jobs:
       VERSION: ${{ needs.validate.outputs.version }}
       MACOSX_DEPLOYMENT_TARGET: "12.0"
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           cache-on-failure: true
       - name: Linux dependencies
@@ -156,7 +180,20 @@ jobs:
       - name: Renderer regression
         run: cargo test --locked -p iced_tiny_skia --lib
       - name: Build Iced
+        if: runner.os != 'Linux'
         run: cargo build --release --locked -p rustxt-iced
+      # Linux keeps the symbols out of the shipped binary but publishes them as
+      # rustxt-<version>-x86_64-linux.debug so crash backtraces from the tarball
+      # can be symbolised (gdb and eu-stack find it via the build id/debuglink).
+      # The deb, rpm and Arch packages are separate builds of the same source
+      # and do not match this .debug file.
+      - name: Build Iced with line tables, split the symbols out
+        if: runner.os == 'Linux'
+        run: |
+          cargo build --release --locked -p rustxt-iced --config profile.release.strip=false --config 'profile.release.debug="line-tables-only"'
+          mkdir -p dist
+          objcopy --only-keep-debug --compress-debug-sections=zlib target/release/rustxt-iced "dist/rustxt-$VERSION-x86_64-linux.debug"
+          objcopy --strip-all --add-gnu-debuglink="dist/rustxt-$VERSION-x86_64-linux.debug" target/release/rustxt-iced target/release/rustxt-iced
       - name: Native startup smoke test
         if: runner.os != 'Linux'
         run: python tools/iced-startup-smoke.py target/release
@@ -196,13 +233,32 @@ jobs:
           Copy-Item target/release/rustxt-iced.exe dist/rustxt/rustxt.exe
           Copy-Item LICENSE,README.md dist/rustxt/
           Compress-Archive dist/rustxt/* "dist/rustxt-$version-x86_64-windows.zip"
-      - uses: actions/upload-artifact@v4
+      # Same "<sha256>  <name>" lines sha256sum -c and install.sh read.
+      - name: Checksums
+        if: runner.os != 'Windows'
+        run: |
+          cd dist
+          for f in *.tar.gz *.zip *.debug; do
+            [ -e "$f" ] || continue
+            if command -v sha256sum >/dev/null 2>&1; then sha256sum "$f" > "$f.sha256"; else shasum -a 256 "$f" > "$f.sha256"; fi
+          done
+      - name: Checksums
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Get-ChildItem dist -File -Filter *.zip | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            [IO.File]::WriteAllText("$($_.FullName).sha256", "$hash  $($_.Name)`n")
+          }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: native-${{ matrix.os }}
           path: |
             dist/*.tar.gz
             dist/*.zip
-      - uses: actions/upload-artifact@v4
+            dist/*.debug
+            dist/*.sha256
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure() && runner.os == 'Linux'
         with:
           name: release-e2e-failure
@@ -229,8 +285,8 @@ jobs:
             image: fedora:42
             install: dnf install -y xorg-x11-server-Xvfb xorg-x11-xauth python3 dejavu-sans-fonts /packages/*.rpm
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ${{ matrix.package }}
           path: packages
@@ -245,23 +301,43 @@ jobs:
   release:
     name: Publish GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [arch, deb, rpm, native, package-smoke]
+    needs: [validate, arch, deb, rpm, native, package-smoke]
     runs-on: ubuntu-latest
+    # The only job that writes: the release itself, plus the OIDC token and
+    # attestation store for the build provenance.
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      VERSION: ${{ needs.validate.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: dist
           merge-multiple: true
-      - name: AUR recipe
+      # SHA256SUMS is the producers' .sha256 files concatenated (PKGBUILD is
+      # generated here, so it is the one entry hashed on this runner), then
+      # every download is verified against it before anything is published.
+      - name: Assemble SHA256SUMS and the AUR recipe
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          sha=$(sha256sum "dist/rustxt-$VERSION-x86_64-linux.tar.gz" | cut -d' ' -f1)
-          sed -e "s/@VERSION@/$VERSION/" -e "s/@SHA256@/$sha/" packaging/aur/rustxt-bin/PKGBUILD > dist/PKGBUILD
-      - name: Checksums
-        run: cd dist && sha256sum * > SHA256SUMS && ls -la
-      - uses: softprops/action-gh-release@v2
+          set -eu
+          cd dist
+          cat ./*.sha256 | LC_ALL=C sort -k2 > SHA256SUMS
+          rm ./*.sha256
+          sha="$(grep " rustxt-$VERSION-x86_64-linux.tar.gz\$" SHA256SUMS | cut -d' ' -f1)"
+          test -n "$sha"
+          sed -e "s/@VERSION@/$VERSION/" -e "s/@SHA256@/$sha/" ../packaging/aur/rustxt-bin/PKGBUILD > PKGBUILD
+          sha256sum PKGBUILD >> SHA256SUMS
+          sha256sum -c SHA256SUMS
+          ls -la
+      - name: Build provenance for every release asset
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: dist/*
           generate_release_notes: true
-          body_path: docs/releases/0.5.0.md
+          body_path: docs/releases/${{ needs.validate.outputs.version }}.md

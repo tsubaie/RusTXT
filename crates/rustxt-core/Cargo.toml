@@ -2,6 +2,7 @@
 name = "rustxt-core"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 description = "Toolkit-independent core of RusTXT: documents, recovery storage, configuration, themes"
 
@@ -12,6 +13,4 @@ rusqlite = { version = "0.37", features = ["bundled"] }
 tempfile = "3"
 uuid = { version = "1", features = ["v4"] }
 notify = "8"
-serde_json = "1"
-semver = "1"
 sha2 = "0.10"
