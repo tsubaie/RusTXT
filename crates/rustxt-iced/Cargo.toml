@@ -11,7 +11,7 @@ rustxt-core = { path = "../rustxt-core" }
 iced = { version = "0.14", default-features = false, features = ["tiny-skia", "svg", "advanced-shaping", "tokio", "x11", "wayland", "linux-theme-detection"] }
 iced_graphics = "0.14"
 unicode-script = "0.5"
-rfd = "0.16"
+rfd = "0.17"
 regex = "1"
 chrono = "0.4"
 fs2 = "0.4"

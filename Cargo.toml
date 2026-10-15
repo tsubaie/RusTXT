@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = ["crates/rustxt-core", "crates/rustxt-iced"]
 default-members = ["crates/rustxt-iced"]
 
@@ -7,6 +7,7 @@ default-members = ["crates/rustxt-iced"]
 version = "0.6.0"
 edition = "2021"
 # Minimum supported Rust: iced 0.14 requires 1.88, verified by the CI MSRV job.
+# Resolver 3 makes `cargo update` respect it (uuid 1.28+ needs 1.89, for one).
 rust-version = "1.88"
 license = "MIT"
 description = "A dead simple, recoverable plain text editor"
