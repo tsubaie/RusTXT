@@ -7,6 +7,15 @@ accompany each GitHub Release live in `docs/releases/<version>.md`.
 
 ## [Unreleased]
 
+### Changed
+
+- Dependencies: `toml` 1.1, `rusqlite` 0.40 (bundled SQLite 3.53), `sha2` 0.11,
+  `rfd` 0.17. The content fingerprint is hex-encoded by hand because `sha2`
+  0.11 no longer formats digests directly; the output is unchanged.
+- Cargo resolver 3, so `cargo update` keeps the lockfile within the declared
+  minimum Rust version (1.88) instead of pulling crates that need a newer
+  compiler.
+
 ## [0.6.0] - 2026-10-14
 
 ### Removed

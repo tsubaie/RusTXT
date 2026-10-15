@@ -14,7 +14,13 @@ use std::{
 pub const MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;
 
 pub fn content_fingerprint(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    use std::fmt::Write as _;
+    Sha256::digest(bytes)
+        .iter()
+        .fold(String::with_capacity(64), |mut hex, byte| {
+            let _ = write!(hex, "{byte:02x}");
+            hex
+        })
 }
 
 pub fn disk_fingerprint(path: &Path) -> Result<String, String> {
