@@ -82,7 +82,7 @@ jobs:
         run: |
           mkdir -p dist && cp packaging/arch/*.pkg.tar.zst dist/
           cd dist && for f in *; do sha256sum "$f" > "$f.sha256"; done
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: arch
           path: dist/*
@@ -116,7 +116,7 @@ jobs:
           cargo deb -p rustxt-iced --locked
           mkdir -p dist && cp target/debian/*.deb dist/
           cd dist && for f in *; do sha256sum "$f" > "$f.sha256"; done
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: deb
           path: dist/*
@@ -146,7 +146,7 @@ jobs:
           cargo generate-rpm -p crates/rustxt-iced
           mkdir -p dist && cp target/generate-rpm/*.rpm dist/
           cd dist && for f in *; do sha256sum "$f" > "$f.sha256"; done
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: rpm
           path: dist/*
@@ -250,7 +250,7 @@ jobs:
             $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
             [IO.File]::WriteAllText("$($_.FullName).sha256", "$hash  $($_.Name)`n")
           }
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-${{ matrix.os }}
           path: |
@@ -258,7 +258,7 @@ jobs:
             dist/*.zip
             dist/*.debug
             dist/*.sha256
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure() && runner.os == 'Linux'
         with:
           name: release-e2e-failure
