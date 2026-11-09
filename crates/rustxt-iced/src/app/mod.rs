@@ -107,6 +107,12 @@ pub fn run() -> iced::Result {
         min_size: Some(iced::Size::new(540.0, 360.0)),
         decorations,
         exit_on_close_request: false,
+        // Wayland app_id / X11 WM_CLASS; must match the .desktop file name.
+        #[cfg(target_os = "linux")]
+        platform_specific: window::settings::PlatformSpecific {
+            application_id: "com.tsubaie.rustxt".to_owned(),
+            ..Default::default()
+        },
         ..Default::default()
     })
     .settings(iced::Settings {
